@@ -1,8 +1,14 @@
 
 //設定ファイル
 const config = require('./config');
+// fsモジュール：https通信するためのcertとkeyをファイルから読むため
+const fs = require('fs');
 //httpsモジュール
 const https = require('https');
+// urlモジュール
+const url = require('url');
+// protoo-serverモジュール：websocket部分
+const protoo = require('protoo-server');
 //mediasoupモジュール
 const mediasoup = require('mediasoup');
 //expressモジュール
@@ -20,13 +26,13 @@ const utils = require('./lib/utils');
 
 const logger = new Logger();
 
-import { Server } from 'socket.io'
+// const { Server } = require('socket.io')
 
 // ルームを非同期で処理するためのqueue.
 // @type {AwaitQueue}
 const queue = new AwaitQueue();
 
-// Map of Room instances indexed by roomName.
+// Map of Room instances indexed by roomId.
 // @type {Map<Number, Room>}
 const rooms = new Map();
 
@@ -38,9 +44,13 @@ let httpsServer;
 // @type {Function}
 let expressApp;
 
-// WebSocket server.
+// Protoo WebSocket server.
 // @type {protoo.WebSocketServer}
-let webSocketServer;
+let protooWebSocketServer;
+
+// // WebSocket server.
+// // @type {protoo.WebSocketServer}
+// let webSocketServer;
 
 // mediasoup Workers.
 // @type {Array<mediasoup.Worker>}
@@ -114,19 +124,24 @@ async function runMediasoupWorkers()
 		// Each mediasoup Worker will run its own WebRtcServer, so those cannot
 		// share the same listening ports. Hence we increase the value in config.js
 		// for each Worker.
-		const webRtcServerOptions = utils.clone(config.mediasoup.webRtcServerOptions);
-		const portIncrement = mediasoupWorkers.length - 1;
-
-		for (const listenInfo of webRtcServerOptions.listenInfos)
+		if (process.env.MEDIASOUP_USE_WEBRTC_SERVER !== 'false')
 		{
-			listenInfo.port += portIncrement;
+			// Each mediasoup Worker will run its own WebRtcServer, so those cannot
+			// share the same listening ports. Hence we increase the value in config.js
+			// for each Worker.
+			const webRtcServerOptions = utils.clone(config.mediasoup.webRtcServerOptions);
+			const portIncrement = mediasoupWorkers.length - 1;
+
+			console.log(portIncrement)
+			for (const listenInfo of webRtcServerOptions.listenInfos)
+			{
+				listenInfo.port += portIncrement;
+			}
+
+			const webRtcServer = await worker.createWebRtcServer(webRtcServerOptions);
+
+			worker.appData.webRtcServer = webRtcServer;
 		}
-
-		const webRtcServer = await worker.createWebRtcServer(webRtcServerOptions);
-
-		worker.appData.webRtcServer = webRtcServer;
-
-
 
 		// Log worker resource usage every X seconds.
 		setInterval(async () =>
@@ -152,34 +167,172 @@ async function createExpressApp(){
 	 * existing room.
 	 */
 	expressApp.param(
-		'roomName', (req, res, next, roomName) =>
+		'roomId', (req, res, next, roomId) =>
 		{
 			// The room must exist for all API requests.
-			if (!rooms.has(roomName))
+			if (!rooms.has(roomId))
 			{
-				const error = new Error(`room with id "${roomName}" not found`);
+				const error = new Error(`room with id "${roomId}" not found`);
 
 				error.status = 404;
 				throw error;
 			}
-
-			req.room = rooms.get(roomName);
+			//serverで保持してるrooms[Map()]にroomIdのroomがあるか検索し、結果を返す
+			req.room = rooms.get(roomId);
 
 			next();
 		});
 
-		/**
-		 * API GET resource that returns the mediasoup Router RTP capabilities of
-		 * the room.
-		 */
-		expressApp.get(
-			'/rooms/:roomName', (req, res) =>
+	/**
+	 * API GET resource that returns the mediasoup Router RTP capabilities of
+	 * the room.
+	 */
+	// expressApp.paramでreq.roomにrooms[Mas()]で取得したroomIdに合致したルームを代入している。
+ 	// dataにはそのroomでgetRouterRtpCapabilities()をした結果を返す
+	expressApp.get(
+		'/rooms/:roomId', (req, res) =>
+		{
+			const data = req.room.getRouterRtpCapabilities();
+
+			res.status(200).json(data);
+		});
+
+	/**
+	 * POST API to create a Broadcaster.
+	 */
+	expressApp.post(
+		'/rooms/:roomId/broadcasters', async (req, res, next) =>
+		{
+			const {
+				id,
+				displayName,
+				device,
+				rtpCapabilities
+			} = req.body;
+
+			try
 			{
-				const data = req.room.getRouterRtpCapabilities();
+				const data = await req.room.createBroadcaster(
+					{
+						id,
+						displayName,
+						device,
+						rtpCapabilities
+					});
 
 				res.status(200).json(data);
-			});
+			}
+			catch (error)
+			{
+				next(error);
+			}
+		});
 
+	/**
+	* DELETE API to delete a Broadcaster.
+	*/
+	expressApp.delete(
+	'/rooms/:roomId/broadcasters/:broadcasterId', (req, res) =>
+	{
+		const { broadcasterId } = req.params;
+
+		req.room.deleteBroadcaster({ broadcasterId });
+
+		res.status(200).send('broadcaster deleted');
+	});
+
+	/**
+	 * POST API to create a mediasoup Transport associated to a Broadcaster.
+	 * It can be a PlainTransport or a WebRtcTransport depending on the
+	 * type parameters in the body. There are also additional parameters for
+	 * PlainTransport.
+	 */
+	expressApp.post(
+		'/rooms/:roomId/broadcasters/:broadcasterId/transports',
+		async (req, res, next) =>
+		{
+			const { broadcasterId } = req.params;
+			const { type, rtcpMux, comedia, sctpCapabilities } = req.body;
+
+			try
+			{
+				const data = await req.room.createBroadcasterTransport(
+					{
+						broadcasterId,
+						type,
+						rtcpMux,
+						comedia,
+						sctpCapabilities
+					});
+
+				res.status(200).json(data);
+			}
+			catch (error)
+			{
+				next(error);
+			}
+		});
+
+	/**
+	 * POST API to create a mediasoup Producer associated to a Broadcaster.
+	 * The exact Transport in which the Producer must be created is signaled in
+	 * the URL path. Body parameters include kind and rtpParameters of the
+	 * Producer.
+	 */
+	expressApp.post(
+		'/rooms/:roomId/broadcasters/:broadcasterId/transports/:transportId/producers',
+		async (req, res, next) =>
+		{
+			const { broadcasterId, transportId } = req.params;
+			const { kind, rtpParameters } = req.body;
+
+			try
+			{
+				const data = await req.room.createBroadcasterProducer(
+					{
+						broadcasterId,
+						transportId,
+						kind,
+						rtpParameters
+					});
+
+				res.status(200).json(data);
+			}
+			catch (error)
+			{
+				next(error);
+			}
+		});
+
+	/**
+	 * POST API to create a mediasoup Consumer associated to a Broadcaster.
+	 * The exact Transport in which the Consumer must be created is signaled in
+	 * the URL path. Query parameters must include the desired producerId to
+	 * consume.
+	 */
+	expressApp.post(
+		'/rooms/:roomId/broadcasters/:broadcasterId/transports/:transportId/consume',
+		async (req, res, next) =>
+		{
+			const { broadcasterId, transportId } = req.params;
+			const { producerId } = req.query;
+
+			try
+			{
+				const data = await req.room.createBroadcasterConsumer(
+					{
+						broadcasterId,
+						transportId,
+						producerId
+					});
+
+				res.status(200).json(data);
+			}
+			catch (error)
+			{
+				next(error);
+			}
+		});
 
 }
 
@@ -207,54 +360,103 @@ async function runHttpsServer()
 			Number(config.https.listenPort), config.https.listenIp, resolve);
 	});
 }
- 
+
 async function runWebSocketServer()
 {
 	logger.info('running WebSocketServer...');
 
-	webSocketServer = new Server(httpsServer);
+	//socket.ioでの書き換えパターン
+	// webSocketServer = new Server(httpsServer);
+	// webSocketServer.on('connection', async socket =>{
+	// 	// The client indicates the roomId and peerId in the URL query.
+	// 	const roomId = socket.roomId;
+	// 	const socketId = socket.id;
+	//
+	// 	socket.emit('connection-success', {
+	// 		socketId: socket.id,
+	// 	})
+	//
+	// 	if (!roomId || !socketId)
+	// 	{
+	// 		reject(400, 'Connection request without roomId and/or peerId');
+	//
+	// 		return;
+	// 	}
+	//
+	//
+	// 	logger.info(
+	// 		'websocket connection request [roomId:%s, peerId:%s, address:%s, origin:%s]',
+	// 		roomId, peerId, info.socket.remoteAddress, info.origin);
+	//
+	//
+	// 		// Serialize this code into the queue to avoid that two peers connecting at
+	// 		// the same time with the same roomId create two separate rooms with same
+	// 		// roomId.
+	// 		queue.push(async () =>
+	// 		{
+	// 			const room = await getOrCreateRoom({ roomId });
+	//
+	// 			// Accept the protoo WebSocket connection.
+	// 			const protooWebSocketTransport = accept();
+	//
+	// 			room.handleProtooConnection({ peerId, protooWebSocketTransport });
+	// 		})
+	// 		.catch((error) =>
+	// 		{
+	// 			logger.error('room creation or room joining failed:%o', error);
+	//
+	// 			reject(error);
+	// 		});
+	// })
+	// Create the protoo WebSocket server.
 
-	webSocketServer.on('connection', async socket =>{
-		// The client indicates the roomId and peerId in the URL query.
-		const roomName = socket.roomName;
-		const socketId = socket.id;
 
-		socket.emit('connection-success', {
-			socketId: socket.id,
-		})
-
-		if (!roomName || !socketId)
+	protooWebSocketServer = new protoo.WebSocketServer(httpsServer,
 		{
-			reject(400, 'Connection request without roomId and/or peerId');
+			maxReceivedFrameSize     : 960000, // 960 KBytes.
+			maxReceivedMessageSize   : 960000,
+			fragmentOutgoingMessages : true,
+			fragmentationThreshold   : 960000
+		});
+
+	// Handle connections from clients.
+	protooWebSocketServer.on('connectionrequest', (info, accept, reject) =>
+	{
+		// The client indicates the roomId and peerId in the URL query.
+		const u = url.parse(info.request.url, true);
+		const roomId = u.query['roomId'];
+		const peerId = u.query['peerId'];
+
+		if (!roomId || !peerId)
+		{
+			reject(400, 'Connection request without roomId and/or roomId');
 
 			return;
 		}
 
-
 		logger.info(
-			'websocket connection request [roomId:%s, peerId:%s, address:%s, origin:%s]',
+			'protoo connection request [roomId:%s, peerId:%s, address:%s, origin:%s]',
 			roomId, peerId, info.socket.remoteAddress, info.origin);
 
+		// Serialize this code into the queue to avoid that two peers connecting at
+		// the same time with the same roomId create two separate rooms with same
+		// roomId.
+		queue.push(async () =>
+		{
+			const room = await getOrCreateRoom({ roomId });
 
-			// Serialize this code into the queue to avoid that two peers connecting at
-			// the same time with the same roomId create two separate rooms with same
-			// roomId.
-			queue.push(async () =>
-			{
-				const room = await getOrCreateRoom({ roomId });
+			// Accept the protoo WebSocket connection.
+			const protooWebSocketTransport = accept();
 
-				// Accept the protoo WebSocket connection.
-				const protooWebSocketTransport = accept();
-
-				room.handleProtooConnection({ peerId, protooWebSocketTransport });
-			})
+			room.handleProtooConnection({ peerId, protooWebSocketTransport });
+		})
 			.catch((error) =>
 			{
 				logger.error('room creation or room joining failed:%o', error);
 
 				reject(error);
 			});
-	})
+	});
 }
 
 /**
@@ -275,6 +477,7 @@ function getMediasoupWorker()
  */
 async function getOrCreateRoom({ roomId })
 {
+	//serverで保持してるrooms[Mas()]から取得する
 	let room = rooms.get(roomId);
 
 	// If the Room does not exist create a new one.

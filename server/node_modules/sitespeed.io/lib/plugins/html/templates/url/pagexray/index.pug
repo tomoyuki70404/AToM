@@ -1,0 +1,100 @@
+include ../../_tableMixins
+
+- const pagexray = pageInfo.data.pagexray.run || pageInfo.data.pagexray.pageSummary;
+
+small 
+    || 
+    a(href='#pagexray-summary') Summary 
+    | &nbsp;|&nbsp;
+    a(href='#largest-assets') Largest responses 
+    | &nbsp;|&nbsp;
+    a(href='#requests-and-sizes-per-content-type') Requests and sizes per content type 
+    | &nbsp;|&nbsp;
+    a(href='#data-per-domain') Data per domain
+    | &nbsp;|&nbsp;
+    a(href='#expires-and-last-modified-stats') Expires and last modified statistics 
+    | &nbsp;|&nbsp;
+    if pageInfo.data.browsertime && pageInfo.data.browsertime.console
+      a(href='#console-log') Console log 
+      | &nbsp;|&nbsp;
+    if pagexray.afterOnLoad.requests > 0
+      a(href='#requests-after-onload') Requests loaded after onLoad event 
+      | &nbsp;|&nbsp;
+    if pagexray.renderBlocking
+      a(href='#requests-render-blocking') Render blocking requests 
+      | &nbsp;|&nbsp;
+
+h3 
+a
+h2 PageXray
+p.small How the page is built.
+a#pagexray-summary
+.row
+  .one-half.column
+    table
+      th(colspan='2') Summary
+        tr
+          td HTTP version
+          td.right #{pagexray.httpVersion}
+        tr
+          td Total requests
+          +numberCell('', pagexray.requests)
+        tr
+          td Total domains
+          +numberCell('', pagexray.totalDomains)
+        tr
+          td Total transfer size
+          +sizeCell('', pagexray.transferSize)
+        tr
+          td Total content size
+          +sizeCell('', pagexray.contentSize)
+        tr
+          td Responses missing compression
+          +numberCell('', pagexray.missingCompression)
+        tr
+          td Number of cookies
+          +numberCell('', pagexray.cookies)
+        tr
+          td Third party cookies
+          +numberCell('', pagexray.cookieNamesThirdParties.length)
+
+  .one-half.column
+    table
+      th(colspan='2') Requests per response code
+      each total, code in pagexray.responseCodes
+        tr
+          td #{code}
+          td #{total}
+
+include ./largest.pug
+
+include ./perContentType.pug
+
+include ./perDomain.pug
+
+a#expires-and-last-modified-stats
+h3 Expires and last modified statistics
+- expire = pagexray.expireStats
+- lastModified = pagexray.lastModifiedStats
+.responsive
+  table
+    +rowHeading(['type', 'min', 'median', 'max'])
+    if expire
+      tr
+        td(data-title='Type') Expires
+        +durationCell('min', expire.min)
+        +durationCell('median', expire.median)
+        +durationCell('max', expire.max)
+    if lastModified
+      tr
+        td(data-title='Type') Last modified
+        +durationCell('min', lastModified.min)
+        +durationCell('median', lastModified.median)
+        +durationCell('max', lastModified.max)
+
+if pageInfo.data.browsertime && pageInfo.data.browsertime.console
+    include ./console.pug
+
+include ./after.pug
+
+include ./blocking.pug

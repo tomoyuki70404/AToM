@@ -1,0 +1,20 @@
+extends ./layout.pug
+include _tableMixins
+
+mixin row(errors)
+  each error, url in errors
+    tr
+      td
+        - if (url !== 'generic')
+          a(href=url)= url
+      td
+        ul
+          each pageerrors, tool in error
+            each myerror in pageerrors
+              li #{myerror} 
+                b (#{tool})
+block content
+    h2 Errors
+    table
+        +rowHeading(['url', 'errors'])
+        +row(errors)

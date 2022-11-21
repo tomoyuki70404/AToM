@@ -6,7 +6,7 @@ module.exports =
 
 	https  :
 	{
-		listenIp   : '192.168.35.35',
+		listenIp   : '192.168.10.113',
 		// NOTE: Don't change listenPort (client app assumes 4443).
 		listenPort : process.env.PROTOO_LISTEN_PORT || 4443,
 		// NOTE: Set your own valid certificate files.
@@ -134,7 +134,7 @@ module.exports =
 			listenIps :
 			[
 				{
-					ip          : process.env.MEDIASOUP_LISTEN_IP || '192.168.35.35',
+					ip          : process.env.MEDIASOUP_LISTEN_IP || '192.168.10.113',
 					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP
 				}
 			],
@@ -151,7 +151,7 @@ module.exports =
 		{
 			listenIp :
 			{
-				ip          : process.env.MEDIASOUP_LISTEN_IP || '192.168.35.35',
+				ip          : process.env.MEDIASOUP_LISTEN_IP || '192.168.10.113',
 				announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP
 			},
 			maxSctpMessageSize : 262144

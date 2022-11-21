@@ -1,0 +1,70 @@
+extends ./layout.pug
+include _tableMixins
+
+mixin rows(pages)
+  each pageInfo, url in pages
+    - p = pageInfo.data.pagexray && pageInfo.data.pagexray.pageSummary ? pageInfo.data.pagexray.pageSummary : {}
+    - tp = pageInfo.data.thirdparty ? pageInfo.data.thirdparty.pageSummary : {}
+    - b = pageInfo.data.browsertime ? pageInfo.data.browsertime.pageSummary : {}
+    - t = p.contentTypes || {javascript: {transferSize: ''}, css: {transferSize: ''}, image: {transferSize: ''}}
+    - display = (options.urlsMetaData && options.urlsMetaData[url] && options.urlsMetaData[url].urlAlias) ? options.urlsMetaData[url].urlAlias : url
+    - display = (pageInfo.data.browsertime && b.info.alias) ? b.info.alias : display
+    - metricList = html.pageSummaryMetrics
+    tr
+      td.url.pagesurl(data-title='URL')
+        a(href= pageInfo.path + 'index.html')= decodeURIComponent(display)
+      if (b.visualMetrics && b.visualMetrics[0]) && (!hasPageSummaryMetricInput)
+        +numberCell('First Visual Change', b.visualMetrics[0].FirstVisualChange)
+        +numberCell('Speed Index', b.visualMetrics[0].SpeedIndex)
+        +numberCell('Last Visual Change', b.visualMetrics[0].LastVisualChange)
+
+      each metric in metricList
+        - [m, metricType] = metric.split('.')
+        - fullPath = ''
+        - toolName = ''
+        each tool in Object.keys(friendlyNames)
+          - toolName = tool
+          - fullPath = friendlyNames[tool][m] && friendlyNames[tool][m][metricType] ? friendlyNames[tool][m][metricType].path : undefined
+          - name = friendlyNames[tool][m] && friendlyNames[tool][m][metricType] ? friendlyNames[tool][m][metricType].name : ''
+          if (fullPath !== undefined)
+            - break
+        - value = pageInfo.data[toolName] ? get(pageInfo.data[toolName].pageSummary, fullPath, 0) : 0
+        if (fullPath.indexOf('Size') > -1)
+          +kbSizeCell(name, value)
+        else if metricType === 'performance'
+          td.number(data-title=name, data-value=value)
+            - label = 'label ' +  h.scoreLabel(value)
+            span(class=label) #{value}
+        else if metricType.toLowerCase() === 'httperrors'
+          - errors = Object.keys(value).filter(code => code > 399).length
+          +numberCell(name, errors)
+        else
+          +numberCell(name, value)
+
+block content
+  - headings = ['URL']
+  if (options.browsertime.visualMetrics && !hasPageSummaryMetricInput)
+    - headings.push('First Visual Change', 'Speed Index', 'Last Visual Change')
+  - metricList = html.pageSummaryMetrics
+  each kv in metricList
+    - [k, v] = kv.split('.')
+    - headingText = ''
+    each tool in Object.keys(friendlyNames)
+      if (friendlyNames[tool] && friendlyNames[tool][k] && friendlyNames[tool][k][v])
+        - headingText = friendlyNames[tool][k][v].name
+    - headings.push(headingText)
+  .row
+    .column
+      include runInfo
+      .responsive
+        table(data-sortable, id='pages')
+          +rowHeading(headings)
+          +rows(pages, true)
+          if removedUrls.length > 0
+            tr
+              td(colspan=headings.length) 
+                b The following pages metrics/data was removed because they passed the budget configuration.
+            each url in removedUrls
+              tr
+                  td.url.pagesurl(data-title='URL', colspan=headings.length)
+                    a(href= url)= decodeURIComponent(url)

@@ -1,0 +1,30 @@
+extends ./layout.pug
+include _tableMixins
+
+mixin row(budget)
+  each results, urlOrAlias in budget
+    each result in results
+      tr
+        td
+          if (urlOrAlias &&  urlOrAlias.startsWith('http')) 
+            a(href=urlOrAlias)= urlOrAlias
+          else 
+            a(href=aliasToUrl[urlOrAlias])= urlOrAlias 
+            p #{aliasToUrl[urlOrAlias]}
+        td #{result.metric} with value #{result.friendlyValue || result.value} limit #{result.limitType} #{result.friendlyLimit || result.limit}
+
+block content
+    h2 The budget
+    p The result of the performance budget. We got #{totalFailing} failing and #{totalWorking} working.
+
+    h3 Failing budgets [#{totalFailing}]
+    if totalFailing > 0 
+      table
+          +rowHeading(['url', 'result'])
+          +row(budget.failing)
+
+    h3 Working budgets [#{totalWorking}]
+    if totalWorking > 0 
+      table
+          +rowHeading(['url', 'result'])
+          +row(budget.working)
