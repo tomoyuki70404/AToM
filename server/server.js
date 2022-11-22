@@ -366,7 +366,7 @@ async function runWebSocketServer()
 	logger.info('running WebSocketServer...');
 
 	//socket.ioでの書き換えパターン
-<<<<<<< HEAD
+	
 	// webSocketServer = new Server(httpsServer);
 	// webSocketServer.on('connection', async socket =>{
 	// 	// The client indicates the roomName and peerId in the URL query.
@@ -409,7 +409,6 @@ async function runWebSocketServer()
 	// 			reject(error);
 	// 		});
 	// })
-=======
 	webSocketServer = new Server(httpsServer);
 	webSocketServer.on('connection', async socket =>{
 		// The client indicates the roomId and peerId in the URL query.

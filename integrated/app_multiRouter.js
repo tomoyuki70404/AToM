@@ -1,50 +1,41 @@
-import os
+const os = require('os')
 
-import express from 'express'
+const express = require('express')
+const https = require( 'httpolyglot')
+const http = require( 'http')
+const fs = require( 'fs')
+const path = require( 'path')
 
-import https from 'httpolyglot'
-import http from 'http'
-import fs from 'fs'
-import path from 'path'
-
-import { Server } from 'socket.io'
-import mediasoup from 'mediasoup'
+const { Server } = require( 'socket.io')
+const mediasoup = require( 'mediasoup')
+//awaitqueueモジュール
+const { AwaitQueue } = require( 'awaitqueue')
 
 // Express application.
 // @type {Function}
 let app;
 
-//awaitqueueモジュール
-const { AwaitQueue } = require('awaitqueue');
+const Logger = require('./lib/Logger');
+
+const Room = require('./lib/Room');
 
 
+const logger = new Logger();
 
+// websocketserverのもとを作成
+let io
 
 // mediasoup Workers.
 // @type {Array<mediasoup.Worker>}
-const mediasoupWorkers = [];
+let mediasoupWorkers = [];
 
 // ルームを非同期で処理するためのqueue.
 // @type {AwaitQueue}
-const queue = new AwaitQueue();
+let queue = new AwaitQueue();
 
-const mediaCodecs = [
-  {
-    kind: 'audio',
-    mimeType: 'audio/opus',
-    clockRate: 48000,
-    channels: 2,
-  },
-  {
-	kind: 'video',
-	mimeType: 'video/vp8',
-	clockRate: 90000,
-	parameters:
-		{
-		  'x-google-start-bitrate': 1000
-		}
-  },
-]
+// Map of Room instances indexed by roomId.
+// @type {Map<Number, Room>}
+let rooms = new Map();
 
 // HTTPS server.
 // @type {https.Server}
@@ -55,11 +46,12 @@ let httpsServer;
 let webSocketServer
 
 
-
-
-
 // socket.io namespace (could represent a room?)
-const connections = io.of('/mediasoup')
+let connections
+
+// workerのカウント用インデックス
+let nextMediasoupWorkerIdx = 0
+
 
 run();
 
@@ -68,6 +60,8 @@ async function run(){
 	await runMediasoupWorkers();
 
 	await runExpressApp();
+
+	await runHttpsServer();
 
 	await runWebSocketServer();
 
@@ -125,7 +119,7 @@ async function runExpressApp(){
 	    logger.info("アドレス再確認 アクセス")
 	})
 
-	app.use('send/sfu/room',express.static(path.join(__dirname, 'public/sendOnly')))
+	// app.use('send/sfu/room',express.static(path.join(__dirname, 'public/sendOnly')))
 	app.use('/sfu/:room', express.static(path.join(__dirname, 'public')))
 }
 
@@ -138,49 +132,38 @@ async function runHttpsServer()
 	}
 
 	httpsServer = https.createServer(options, app)
-	await new Promise((resolve)=>{
-		httpsServer.listen(3000, () => {
-			logger.info('listening on port: ' + 3000)
-		})
+	// await new Promise((resolve)=>{
+	// 	httpsServer.listen(3000, () => {
+	// 		logger.info('listening on port: ' + 3000)
+	// 	})
+	// })
+	httpsServer.listen(3000, () => {
+		logger.info('listening on port: ' + 3000)
 	})
 }
 
 async function runWebSocketServer(){
-	const io = new Server(httpsServer);
-	webSocketServer = io.of('/mediasoup')
-	webSocketServer.on('connection',async socket=>{
-		console.log("socket id",socket.id)
-		socket.emit('connection-success', {
-			socketId: socket.id,
+	io = new Server(httpsServer);
+
+	// websocketでroomNameを取得して代入
+	// queryをパースして取得など
+	const roomName = "tempName"
+
+	// mediasoupのnamespaceであるsocketを作成
+	webSocketServerConnection = io.of('/mediasoup')
+
+	webSocketServerConnection.on('connection',async socket =>{
+
+		queue.push(async () =>{
+			// ルームを作成or取得する
+			const room = await getOrCreateRoom({ roomName })
+			console.log("complete!!!!")
+
+			room.handleWebRtcConnection({socket, webSocketServerConnection})
 		})
-
-
-
-
-
-		// Serialize this code into the queue to avoid that two peers connecting at
-		// the same time with the same roomId create two separate rooms with same
-		// roomId.
-		queue.push(async () =>
-		{
-			const room = await getOrCreateRoom({ roomId });
-
-			// Accept the protoo WebSocket connection.
-			const protooWebSocketTransport = accept();
-
-			room.handleProtooConnection({ peerId, protooWebSocketTransport });
-		})
-		.catch((error) =>
-		{
-			logger.error('room creation or room joining failed:%o', error);
-
-			reject(error);
-		});
-
-
-
-
 	})
+
+
 
 }
 
@@ -200,22 +183,22 @@ function getMediasoupWorker()
 /**
  * Get a Room instance (or create one if it does not exist).
  */
-async function getOrCreateRoom({ roomId })
+async function getOrCreateRoom({ roomName })
 {
 	//serverで保持してるrooms[Mas()]から取得する
-	let room = rooms.get(roomId);
+	let room = rooms.get(roomName);
 
 	// If the Room does not exist create a new one.
 	if (!room)
 	{
-		logger.info('creating a new Room [roomId:%s]', roomId);
+		logger.info('creating a new Room [roomName:%s]', roomName);
 
 		const mediasoupWorker = getMediasoupWorker();
 
-		room = await Room.create({ mediasoupWorker, roomId });
+		room = await Room.create({ mediasoupWorker, roomName });
 
-		rooms.set(roomId, room);
-		room.on('close', () => rooms.delete(roomId));
+		rooms.set(roomName, room);
+		room.on('close', () => rooms.delete(roomName));
 	}
 
 	return room;
