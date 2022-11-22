@@ -32,7 +32,7 @@ const logger = new Logger();
 // @type {AwaitQueue}
 const queue = new AwaitQueue();
 
-// Map of Room instances indexed by roomId.
+// Map of Room instances indexed by roomName.
 // @type {Map<Number, Room>}
 const rooms = new Map();
 
@@ -163,22 +163,22 @@ async function createExpressApp(){
 	expressApp.use(bodyParser.json());
 
 	/**
-	 * For every API request, verify that the roomId in the path matches and
+	 * For every API request, verify that the roomName in the path matches and
 	 * existing room.
 	 */
 	expressApp.param(
-		'roomId', (req, res, next, roomId) =>
+		'roomName', (req, res, next, roomName) =>
 		{
 			// The room must exist for all API requests.
-			if (!rooms.has(roomId))
+			if (!rooms.has(roomName))
 			{
-				const error = new Error(`room with id "${roomId}" not found`);
+				const error = new Error(`room with id "${roomName}" not found`);
 
 				error.status = 404;
 				throw error;
 			}
-			//serverで保持してるrooms[Map()]にroomIdのroomがあるか検索し、結果を返す
-			req.room = rooms.get(roomId);
+			//serverで保持してるrooms[Map()]にroomNameのroomがあるか検索し、結果を返す
+			req.room = rooms.get(roomName);
 
 			next();
 		});
@@ -187,10 +187,10 @@ async function createExpressApp(){
 	 * API GET resource that returns the mediasoup Router RTP capabilities of
 	 * the room.
 	 */
-	// expressApp.paramでreq.roomにrooms[Mas()]で取得したroomIdに合致したルームを代入している。
+	// expressApp.paramでreq.roomにrooms[Mas()]で取得したroomNameに合致したルームを代入している。
  	// dataにはそのroomでgetRouterRtpCapabilities()をした結果を返す
 	expressApp.get(
-		'/rooms/:roomId', (req, res) =>
+		'/rooms/:roomName', (req, res) =>
 		{
 			const data = req.room.getRouterRtpCapabilities();
 
@@ -201,7 +201,7 @@ async function createExpressApp(){
 	 * POST API to create a Broadcaster.
 	 */
 	expressApp.post(
-		'/rooms/:roomId/broadcasters', async (req, res, next) =>
+		'/rooms/:roomName/broadcasters', async (req, res, next) =>
 		{
 			const {
 				id,
@@ -232,7 +232,7 @@ async function createExpressApp(){
 	* DELETE API to delete a Broadcaster.
 	*/
 	expressApp.delete(
-	'/rooms/:roomId/broadcasters/:broadcasterId', (req, res) =>
+	'/rooms/:roomName/broadcasters/:broadcasterId', (req, res) =>
 	{
 		const { broadcasterId } = req.params;
 
@@ -248,7 +248,7 @@ async function createExpressApp(){
 	 * PlainTransport.
 	 */
 	expressApp.post(
-		'/rooms/:roomId/broadcasters/:broadcasterId/transports',
+		'/rooms/:roomName/broadcasters/:broadcasterId/transports',
 		async (req, res, next) =>
 		{
 			const { broadcasterId } = req.params;
@@ -280,7 +280,7 @@ async function createExpressApp(){
 	 * Producer.
 	 */
 	expressApp.post(
-		'/rooms/:roomId/broadcasters/:broadcasterId/transports/:transportId/producers',
+		'/rooms/:roomName/broadcasters/:broadcasterId/transports/:transportId/producers',
 		async (req, res, next) =>
 		{
 			const { broadcasterId, transportId } = req.params;
@@ -311,7 +311,7 @@ async function createExpressApp(){
 	 * consume.
 	 */
 	expressApp.post(
-		'/rooms/:roomId/broadcasters/:broadcasterId/transports/:transportId/consume',
+		'/rooms/:roomName/broadcasters/:broadcasterId/transports/:transportId/consume',
 		async (req, res, next) =>
 		{
 			const { broadcasterId, transportId } = req.params;
@@ -368,33 +368,33 @@ async function runWebSocketServer()
 	//socket.ioでの書き換えパターン
 	// webSocketServer = new Server(httpsServer);
 	// webSocketServer.on('connection', async socket =>{
-	// 	// The client indicates the roomId and peerId in the URL query.
-	// 	const roomId = socket.roomId;
+	// 	// The client indicates the roomName and peerId in the URL query.
+	// 	const roomName = socket.roomName;
 	// 	const socketId = socket.id;
 	//
 	// 	socket.emit('connection-success', {
 	// 		socketId: socket.id,
 	// 	})
 	//
-	// 	if (!roomId || !socketId)
+	// 	if (!roomName || !socketId)
 	// 	{
-	// 		reject(400, 'Connection request without roomId and/or peerId');
+	// 		reject(400, 'Connection request without roomName and/or peerId');
 	//
 	// 		return;
 	// 	}
 	//
 	//
 	// 	logger.info(
-	// 		'websocket connection request [roomId:%s, peerId:%s, address:%s, origin:%s]',
-	// 		roomId, peerId, info.socket.remoteAddress, info.origin);
+	// 		'websocket connection request [roomName:%s, peerId:%s, address:%s, origin:%s]',
+	// 		roomName, peerId, info.socket.remoteAddress, info.origin);
 	//
 	//
 	// 		// Serialize this code into the queue to avoid that two peers connecting at
-	// 		// the same time with the same roomId create two separate rooms with same
-	// 		// roomId.
+	// 		// the same time with the same roomName create two separate rooms with same
+	// 		// roomName.
 	// 		queue.push(async () =>
 	// 		{
-	// 			const room = await getOrCreateRoom({ roomId });
+	// 			const room = await getOrCreateRoom({ roomName });
 	//
 	// 			// Accept the protoo WebSocket connection.
 	// 			const protooWebSocketTransport = accept();
@@ -422,28 +422,28 @@ async function runWebSocketServer()
 	// Handle connections from clients.
 	protooWebSocketServer.on('connectionrequest', (info, accept, reject) =>
 	{
-		// The client indicates the roomId and peerId in the URL query.
+		// The client indicates the roomName and peerId in the URL query.
 		const u = url.parse(info.request.url, true);
-		const roomId = u.query['roomId'];
+		const roomName = u.query['roomName'];
 		const peerId = u.query['peerId'];
 
-		if (!roomId || !peerId)
+		if (!roomName || !peerId)
 		{
-			reject(400, 'Connection request without roomId and/or roomId');
+			reject(400, 'Connection request without roomName and/or roomName');
 
 			return;
 		}
 
 		logger.info(
-			'protoo connection request [roomId:%s, peerId:%s, address:%s, origin:%s]',
-			roomId, peerId, info.socket.remoteAddress, info.origin);
+			'protoo connection request [roomName:%s, peerId:%s, address:%s, origin:%s]',
+			roomName, peerId, info.socket.remoteAddress, info.origin);
 
 		// Serialize this code into the queue to avoid that two peers connecting at
-		// the same time with the same roomId create two separate rooms with same
-		// roomId.
+		// the same time with the same roomName create two separate rooms with same
+		// roomName.
 		queue.push(async () =>
 		{
-			const room = await getOrCreateRoom({ roomId });
+			const room = await getOrCreateRoom({ roomName });
 
 			// Accept the protoo WebSocket connection.
 			const protooWebSocketTransport = accept();
@@ -475,22 +475,22 @@ function getMediasoupWorker()
 /**
  * Get a Room instance (or create one if it does not exist).
  */
-async function getOrCreateRoom({ roomId })
+async function getOrCreateRoom({ roomName })
 {
 	//serverで保持してるrooms[Mas()]から取得する
-	let room = rooms.get(roomId);
+	let room = rooms.get(roomName);
 
 	// If the Room does not exist create a new one.
 	if (!room)
 	{
-		logger.info('creating a new Room [roomId:%s]', roomId);
+		logger.info('creating a new Room [roomName:%s]', roomName);
 
 		const mediasoupWorker = getMediasoupWorker();
 
-		room = await Room.create({ mediasoupWorker, roomId });
+		room = await Room.create({ mediasoupWorker, roomName });
 
-		rooms.set(roomId, room);
-		room.on('close', () => rooms.delete(roomId));
+		rooms.set(roomName, room);
+		room.on('close', () => rooms.delete(roomName));
 	}
 
 	return room;
