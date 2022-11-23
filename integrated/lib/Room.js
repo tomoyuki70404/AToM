@@ -19,7 +19,7 @@ class Room extends EventEmitter{
 		// Create a mediasoup Router.
 		const mediasoupRouter = await mediasoupWorker.createRouter({ mediaCodecs });
 
-		// 一旦音声デバイスは最大50まで取れるとしてみる（無理だったら変更 MAX8まで説あり）
+		// 一旦音声デバイスは最大50まで取れるとしてみる（無理だったら変更 MAX8までって何かに書いてあった気がするけど）
 		// Create a mediasoup AudioLevelObserver.
 		const audioLevelObserver = await mediasoupRouter.createAudioLevelObserver(
 			{
@@ -163,37 +163,39 @@ class Room extends EventEmitter{
 		socket.data.rtpCapabilities = undefined;
 		socket.data.sctpCapabilities = undefined;
 
-		socket.data.transports = [];
-		socket.data.producers = [];
-		socket.data.consumers = [];
-		socket.data.dataProducers = [];
-		socket.data.dataConsumers = [];
+		socket.data.transports = new Map();
+		socket.data.producers = new Map();
+		socket.data.consumers = new Map();
+		socket.data.dataProducers = new Map();
+		socket.data.dataConsumers = new Map();
 
 
-		const removeItems = (items, socketId, type) => {
-		  items.forEach(item => {
-			if (item.socketId === socket.id) {
-			  item[type].close()
-			}
-		  })
-		  items = items.filter(item => item.socketId !== socket.id)
-		  return items
-		}
 
 
-		socket.on('disconnect',()=>{
-			logger.debug('disconnect', socket.id)
 
-			socket.data.consumers = removeItems(consumers, socket.id, 'consumer')
-			socket.data.producers = removeItems(producers, socket.id, 'producer')
-			socket.data.transports = removeItems(transports, socket.id, 'transport')
 
-			const { roomName } = peers[socket.id]
+		// joinしてきたときのメソッド
+		socket.on('joinRoom',async({ roomName }, callback)=>{
+			logger.info('joinRoom ',roomName, ' ', socket.id )
+
+			const rtpCapabilities = this._mediasoupRouter.rtpCapabilities
+
+			callback({ rtpCapabilities })
+		})
+
+		socket.on('disconnet',()=>{
+			logger.info('disconnect', socket.id)
+			socket.data.consumers = removeItems(socket.data.consumers,socket.id);
+			socket.data.producers = removeItems(socket.data.producers,socket.id);
+			socket.data.transports = removeItems(socket.data.transports,socket.id);
 
 		})
 
 
-
+	removeItems(items, socketId, type) =>{
+		items.delete(sockeId)
+	    return items
+	}
 
 
 

@@ -154,6 +154,7 @@ async function runWebSocketServer(){
 
 	webSocketServerConnection.on('connection',async socket =>{
 
+
 		queue.push(async () =>{
 			// ルームを作成or取得する
 			const room = await getOrCreateRoom({ roomName })
