@@ -191,7 +191,7 @@ async function getOrCreateRoom({ roomName })
 {
 	//serverで保持してるrooms[Mas()]から取得する
 	let room = rooms.get(roomName);
-	console.log("getOrCreatRoom  room")
+	console.log(` getOrCreateRoom ${roomName}`)
 	// If the Room does not exist create a new one.
 	if (room == undefined)
 	{

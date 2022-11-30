@@ -1,0 +1,194 @@
+body{
+	background-color: #000;
+	width: 97vw;
+	padding: 0;
+	margin: 0;
+}
+p{
+	color: #fff;
+	margin: 0;
+	padding: 0;
+	text-align: center;
+}
+
+video{
+	border: 5px solid #fff;
+    margin: 3px 3px;
+}
+
+
+.mainTable{
+	width:90%
+}
+
+#SignIn{
+	display:block;
+	margin:10px auto;
+	font-size: 80%;
+	padding: 1%;
+	border-radius: 100vh;
+	color: #fff;
+  	background-color: #00335c;
+}
+#SignIn:hover,
+button#SignIn:hover {
+  color: #fff;
+  background: #0078D7;
+}
+
+#userInfo,#selectMedias{
+	height: 50px;
+	display: flex;
+	justify-content: center;
+}
+
+#userInfo input,select{
+	width: 60%;
+	margin: 20px;
+}
+
+
+.department, .name{
+	width: 30vw;
+	height: : 80%;
+	margin:20px;
+	display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#functions {
+	justify-content: center;
+	display: flex;
+}
+
+#functions *{
+	margin:10px 10px;
+}
+
+
+#selectMedias input{
+	margin: 10px;
+}
+
+#selectMediaForm {
+	text-align:  center;
+	margin: auto;
+}
+#selectMediaForm select,#selectMediaForm input[type="text"]{
+	width: 40%;
+	margin: 5px 10px;
+	vertical-align: middle;
+}
+#selectMediaForm input[type="image"]{
+	vertical-align: middle;
+}
+
+#selectMediaForm li{
+	align-items: center;
+	margin: auto;
+	width: 60%;
+	height: 50px;
+}
+
+.muteButton , .camOffOnButton,.soundOnOffBtn{
+	width:30px;
+	height: 30px;
+}
+
+#mainAlea{
+	width: 100%;
+	margin: 0;
+	display: flex;
+	justify-content: space-between;
+}
+
+#watermark{
+	user-select: none;
+	width: 100vw;
+	height: 100vh;
+	word-wrap: break-word;
+	position: absolute;
+	top: -10;
+	left: -10;
+	right: 0;
+	bottom: 0;
+	margin: auto;
+	font-size: 300%;
+	opacity: 0.07;
+	/* transform: rotate(-15deg); */
+}
+
+
+#localVideos{
+	vertical-align: top;
+}
+
+#localVideos video{
+	width:30vw;
+}
+#remoteVideoSize{
+	width: 2%;
+	vertical-align: top;
+}
+#remoteVideos{
+	width: 100%;
+	vertical-align: top;
+}
+#remoteVideoContainer ul{
+	width: 100%;
+
+}
+
+#remoteVideoContainer li{
+	width: 32%;
+	margin:0 8px;
+	list-style:none;
+}
+
+#remoteVideoContainer video{
+	width: 100%;
+}
+
+#audioAlea{
+	position: sticky;
+	align-items: center;
+	top: 10;
+	width: 15%;
+	height:90vh;
+	padding: 0px 5px;
+}
+
+#audioAlea ul{
+	width: 100%;
+}
+
+#audioAlea li{
+	margin: 20px auto;
+	text-align: center;
+	list-style:none;
+}
+
+#audioAlea input[type="range"]{
+	width: 80%;
+}
+
+#audioLists{
+	margin: 0;
+	padding: 0;
+}
+
+#remoteVideoContainer{
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: left;
+}
+
+::cue {
+  font-weight: bold;
+  opacity: 0.3;
+  background:none;
+}
