@@ -105,9 +105,9 @@ async function runExpressApp(){
 	    const path = '/sfu/'
 	    try{
 	        if (req.path.indexOf(path) == 0 && req.path.length > path.length && req.protocol == 'https'){
-				logger.info("remoteAddress")
+				console.log("remoteAddress")
 				var remoteAddress = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-				logger.info(remoteAddress)
+				console.log(remoteAddress)
 	            return next()
 	        }else{
 	            return res.redirect(`https://${req.get('host')}${req.originalUrl}`)
@@ -116,7 +116,7 @@ async function runExpressApp(){
 	        logger.error(err)
 	    }
 	    res.send(`https://{サーバのIPアドレス}/sfu/tvmas のアドレスを再度確認してアクセスしてください`)
-	    logger.info("アドレス再確認 アクセス")
+	    console.log("アドレス再確認 アクセス")
 	})
 
 	// app.use('send/sfu/room',express.static(path.join(__dirname, 'public/sendOnly')))
@@ -134,11 +134,11 @@ async function runHttpsServer()
 	httpsServer = https.createServer(options, app)
 	// await new Promise((resolve)=>{
 	// 	httpsServer.listen(3000, () => {
-	// 		logger.info('listening on port: ' + 3000)
+	// 		console.log('listening on port: ' + 3000)
 	// 	})
 	// })
 	httpsServer.listen(3000, () => {
-		logger.info('listening on port: ' + 3000)
+		console.log('listening on port: ' + 3000)
 	})
 }
 
@@ -147,14 +147,17 @@ async function runWebSocketServer(){
 
 	// websocketでroomNameを取得して代入
 	// queryをパースして取得など
-	const roomName = "tempName"
+	const roomName = ""
 
 	// mediasoupのnamespaceであるsocketを作成
 	webSocketServerConnection = io.of('/mediasoup')
 
 	webSocketServerConnection.on('connection',async socket =>{
-
-
+		const url = "https://"+socket.handshake.headers.host+"/sfu/"
+		const diffRoomNameLength = socket.handshake.headers.referer.length - url.length
+		const roomName = socket.handshake.headers.referer.substr(url.length,diffRoomNameLength-1)
+		// console.log(socket.handshake.headers.referer)
+		console.log(`roomName :${roomName}`)
 		queue.push(async () =>{
 			// ルームを作成or取得する
 			const room = await getOrCreateRoom({ roomName })
@@ -188,11 +191,11 @@ async function getOrCreateRoom({ roomName })
 {
 	//serverで保持してるrooms[Mas()]から取得する
 	let room = rooms.get(roomName);
-
+	console.log("getOrCreatRoom  room")
 	// If the Room does not exist create a new one.
-	if (!room)
+	if (room == undefined)
 	{
-		logger.info('creating a new Room [roomName:%s]', roomName);
+		console.log('creating a new Room [roomName:%s]', roomName);
 
 		const mediasoupWorker = getMediasoupWorker();
 
