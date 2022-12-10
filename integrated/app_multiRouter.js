@@ -190,19 +190,32 @@ function getMediasoupWorker()
 async function getOrCreateRoom({ roomName })
 {
 	//serverで保持してるrooms[Mas()]から取得する
-	let room = rooms.get(roomName);
+	let room1 = rooms.get(roomName);
 	console.log(` getOrCreateRoom ${roomName}`)
+
 	// If the Room does not exist create a new one.
-	if (room == undefined)
+	if (room1 == undefined)
 	{
 		console.log('creating a new Room [roomName:%s]', roomName);
 
 		const mediasoupWorker = getMediasoupWorker();
 
-		room = await Room.create({ mediasoupWorker, roomName });
+		// Roomクラスのインスタンスが返される
+		room1 = await Room.create({ mediasoupWorker, roomName });
 
-		rooms.set(roomName, room);
-		room.on('close', () => rooms.delete(roomName));
+		// roomsの配列に格納
+		rooms.set(roomName, room1);
+		room1.on('close', () => rooms.delete(roomName));
+	}else if(room1.canEntry() == false){
+		// roomのproducers/consumersを確認して判断する
+		// Roomをパイプするときはこのあたりに通常通りのRoom入室とパイプ用の分岐が必要
+		// ルームが存在して、その中のproducers/consumersが規定数に達するレベルでいたらpipeする
+
+		// let room2 = rooms.get(roomName)
+
+		// room.createPipeToAnotherRoom(anotherRoom)
+
+
 	}
 
 	return room;
