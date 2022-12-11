@@ -202,17 +202,40 @@ async function getOrCreateRoom({ roomName })
 		// Roomクラスのインスタンスが返される
 		room = await Room.create({ mediasoupWorker, roomName });
 
-	}else{
-		// 子Roomを作成し、親Roomに追加しておく
-		const mediasoupWorker = getMediasoupWorker();
+		for(let i=0; i<4; i++){
+			// 子Roomを作成し、親Roomに追加しておく
+			const mediasoupWorker = getMediasoupWorker();
 
-		console.log(`childrenRoomSize: ${room.getChildrenRoom().length}`)
+			console.log(`childrenRoomSize: ${room.getChildrenRoom().length}`)
 
-		let childRoom = await Room.create({mediasoupWorker, `${roomName}${room.getChildrenRoom.length+1}`})
+			const parentPeers = room.getPeers();
 
-		// 子Roomを作成し、親Roomに渡す
-		room.setChildRoom(childRoom);
+			const childRoomName = roomName + room.getChildrenRoom.length+1
+
+			// worker,roomName,親Roomにあるpeersを渡す
+			let childRoom = await Room.createChildRoom({mediasoupWorker, childRoomName , parentPeers })
+
+			// 子Roomを作成し、親Roomに渡す
+			room.addChildRoom(childRoom);
+		}
+
 	}
+	// else{
+	// 	// 子Roomを作成し、親Roomに追加しておく
+	// 	const mediasoupWorker = getMediasoupWorker();
+	//
+	// 	console.log(`childrenRoomSize: ${room.getChildrenRoom().length}`)
+	//
+	// 	const parentPeers = room.getPeers();
+	//
+	// 	const childRoomName = roomName + room.getChildrenRoom.length+1
+	//
+	// 	// worker,roomName,親Roomにあるpeersを渡す
+	// 	let childRoom = await Room.createChildRoom({mediasoupWorker, childRoomName , parentPeers })
+	//
+	// 	// 子Roomを作成し、親Roomに渡す
+	// 	room.addChildRoom(childRoom);
+	// }
 	// roomsの配列に格納(roomNameが違うものを格納する。子Roomは入れない。)
 	rooms.set(roomName, room);
 	room.on('close', () => rooms.delete(roomName));
