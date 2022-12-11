@@ -167,8 +167,6 @@ async function runWebSocketServer(){
 		})
 	})
 
-
-
 }
 
 /**
@@ -192,6 +190,8 @@ async function getOrCreateRoom({ roomName })
 	//serverで保持してるrooms[Mas()]から取得する
 	let room = rooms.get(roomName);
 	console.log(` getOrCreateRoom ${roomName}`)
+
+	// 親RoomにあたるRoomを作成
 	// If the Room does not exist create a new one.
 	if (room == undefined)
 	{
@@ -199,11 +199,23 @@ async function getOrCreateRoom({ roomName })
 
 		const mediasoupWorker = getMediasoupWorker();
 
+		// Roomクラスのインスタンスが返される
 		room = await Room.create({ mediasoupWorker, roomName });
 
-		rooms.set(roomName, room);
-		room.on('close', () => rooms.delete(roomName));
+	}else{
+		// 子Roomを作成し、親Roomに追加しておく
+		const mediasoupWorker = getMediasoupWorker();
+
+		console.log(`childrenRoomSize: ${room.getChildrenRoom().length}`)
+
+		let childRoom = await Room.create({mediasoupWorker, `${roomName}${room.getChildrenRoom.length+1}`})
+
+		// 子Roomを作成し、親Roomに渡す
+		room.setChildRoom(childRoom);
 	}
+	// roomsの配列に格納(roomNameが違うものを格納する。子Roomは入れない。)
+	rooms.set(roomName, room);
+	room.on('close', () => rooms.delete(roomName));
 
 	return room;
 }
