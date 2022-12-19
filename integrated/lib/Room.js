@@ -9,9 +9,9 @@ const logger = new Logger('Room');
 class Room extends EventEmitter{
 
 	// 既にルームが無い前提
-	static async create({ mediasoupWorker, roomName })
+	static async create({ mediasoupWorker, roomNameParam })
 	{
-		console.log('create() [roomName:%s]', roomName);
+		console.log('create() [roomName:%s]', roomNameParam);
 		console.log(config)
 		// Router media codecs.
 
@@ -58,7 +58,7 @@ class Room extends EventEmitter{
 		return new Room(
 			{
 				peers,
-				roomName,
+				roomName:roomNameParam,
 				webRtcServer : mediasoupWorker.appData.webRtcServer,
 				mediasoupRouter,
 				audioLevelObserver,
@@ -66,21 +66,22 @@ class Room extends EventEmitter{
 			});
 		}
 
-	// static createPipeToRouter(anotherRouter){
-	//
-	//
-	//
-	// }
-
-	static getChildrenRoom(){
-		return this.childrenRoom
+	setPeers(parentPeers){
+		this._peers = parentPeers
 	}
 
-	static setChildRoom(childRoom){
-		this.childrenRoom.push(childRoom)
+	getChildrenRoom(){
+		return this._childrenRoom
 	}
 
-	static setProducer(socket, pipeProducer, producerLabel, accessLevel){
+	// 親Roomで子Roomをセット
+	// 子Roomに親Roomのpeerを参照させる
+	setChildRoom(childRoom){
+		childRoom.setPeers(this._peers)
+		this._childrenRoom.push(childRoom)
+	}
+
+	setProducer(socket, pipeProducer, producerLabel, accessLevel){
 		const producerData ={
 			socket:socket,
 			producer:pipeProducer,
@@ -191,6 +192,7 @@ class Room extends EventEmitter{
 
 			this._peers.set(socket.id,peerData)
 			console.log(`this._peers.length: ${this._peers.size}`)
+			console.log(`this sockeet: ${socket.id}`)
 
 			callback({ rtpCapabilities })
 		})
@@ -203,23 +205,52 @@ class Room extends EventEmitter{
 
 			console.log("createWebRtcTransport", ` roomName:${roomName} `)
 
-			this.createWebRtcTransport().then(
-				transport => {
-					callback({
-						transportParamfromServer:{
-							id: transport.id,
-							iceParameters: transport.iceParameters,
-							iceCandidates: transport.iceCandidates,
-							dtlsParameters: transport.dtlsParameters,
-						}
-					})
+			// 親Roomの場合
+			if(this._childrenRoom.length > 0 && isConsume == false){
 
-					this.addTransport(socket,transport, isConsume)
-				},
-				error => {
-					logger.error("createWebRtcTransport error:",error)
-				})
-			})
+				this.createWebRtcTransport().then(
+					transport => {
+						callback({
+							transportParamfromServer:{
+								id: transport.id,
+								iceParameters: transport.iceParameters,
+								iceCandidates: transport.iceCandidates,
+								dtlsParameters: transport.dtlsParameters,
+							}
+						})
+
+						this.addTransport(socket,transport, isConsume)
+					},
+					error => {
+						logger.error("createWebRtcTransport error:",error)
+					})
+			}else{
+				const childRoom = this.getLeastConsumersChildRoom();
+
+				childRoom.createWebRtcTransport().then(
+					transport => {
+						callback({
+							transportParamfromServer:{
+								id: transport.id,
+								iceParameters: transport.iceParameters,
+								iceCandidates: transport.iceCandidates,
+								dtlsParameters: transport.dtlsParameters,
+							}
+						})
+						// console.log("this._peers.size")
+						// console.log(this._peers.size)
+						// console.log(`this room is : ${this._roomName}`)
+						// console.log(`child room is : ${childRoom.getRoomName()}`)
+
+						
+						childRoom.addTransport(socket,transport, isConsume)
+					},
+					error => {
+						logger.error("createWebRtcTransport error:",error)
+					}
+				)
+			}
+		})
 
 			socket.on('transport-connect', ({ dtlsParameters }) => {
 				console.log(`transport-connect ${socket.id}`)
@@ -232,43 +263,48 @@ class Room extends EventEmitter{
 				const producerLabel = appData[0].producerLabel
 				const accessLevel = appData[0].accessLevel
 
-				const producer = await this.getTransport(socket.id).produce({
-					kind,
-					rtpParameters,
-				})
 
 				// 親Roomにあたる場合
-				if(this.childrenRoom.length > 0){
+				if(this._childrenRoom.length > 0){
+					console.log("room is parent")
+					const producer = await this.getTransport(socket.id).produce({
+						kind,
+						rtpParameters,
+					})
+
 					// pipeToRouterの処理=========================
 
-					let childRoom = getLeastConsumersChildRoom();
-					const {pipeConsumer, pipeProducer} = this.pipeToRouter({producerId: producer.id, router: childRoom._mediasoupRouter})
-
-					pipeConsumer.on('close', () =>{
-						pipeConsumer.close()
-						peer.data.consumers.delete(socket.id)
+					const childRoom = this.getLeastConsumersChildRoom();
+					await this._mediasoupRouter.pipeToRouter({
+						producerId: producer.id,
+						router: childRoom._mediasoupRouter
 					})
 
-					this.addConsumer(socket, pipeConsumer)
-
-					childRoom.setProducer(socket, pipeProducer, producerLabel, accessLevel)
-
-					pipeProducer.on('close', () => {
-						console.log(`pipe Producer close ${pipeProducer}`)
-						pipeProducer.close()
-					})
+					// 親RoomでaddProducer =>子Roomにもpeersは共有される
+					this.addProducer( socket, producer, producerLabel , accessLevel )
 
 					const peer = this._peers.get(socket.id)
 					const producers = peer.data.producers
 
 					callback({
-						id: pipeProducer.id,
+						id: producer.id,
 						producersExist: producers.length>1 ? true : false,
 						appData:[producerLabel],
 					})
 					// =============================================
 
 				}else{
+					console.log("room is child")
+
+					const transportTest = await this.getTransport(socket.id)
+					console.log(transportTest.keys())
+					console.log(transportTest.values())
+
+					const producer = await this.getTransport(socket.id).produce({
+						kind,
+						rtpParameters,
+					})
+
 					// 子Roomとしてproducerを追加する場合
 
 					this.addProducer(socket, producer, producerLabel, accessLevel)
@@ -312,7 +348,12 @@ class Room extends EventEmitter{
 								// console.log(extProducer)
 								producers = [
 									...producers,
-									{socketId:extPeer.socket.id, producerId:extProducer.producer.id,producerLabel:extProducer.producerLabel,accessLevel:extProducer.accessLevel}
+									{
+										socketId:extPeer.socket.id,
+										producerId:extProducer.producer.id,
+										producerLabel:extProducer.producerLabel,
+										accessLevel:extProducer.accessLevel
+									}
 								]
 							});
 
@@ -336,7 +377,7 @@ class Room extends EventEmitter{
 							]
 						}
 					})
-					console.log(`getProducers   socket.id${socket.id} callbackProducerList:${callbackProducerList}`)
+					console.log(`getProducers   socket.id : ${socket.id} callbackProducerList:${callbackProducerList}`)
 
 					callback(callbackProducerList)
 				}catch(error){
@@ -496,6 +537,10 @@ class Room extends EventEmitter{
 		this._mediasoupRouter.close();
 	}
 
+	getRoomName(){
+		return this._roomName
+	}
+
 	getConsumerSize(){
 		let consumerSize = 0
 
@@ -525,8 +570,12 @@ class Room extends EventEmitter{
 		const transportData ={
 			socket:socket,
 			transport:transport,
-			isConsume:isConsume
+			isConsume:isConsume,
+			routerId:this._mediasoupRouter.id,
+			routerName:this.roomName
 		}
+		console.log("this._peers.size")
+		console.log(this._peers.size)
 		peer.data.transports.set(transport.id, transportData )
 
 		console.log(`transports.length: ${peer.data.transports.size}`)
@@ -639,16 +688,18 @@ class Room extends EventEmitter{
 
 	// 親Roomにproducerを追加するときにconsumeさせたい子Roomを取得する
 	getLeastConsumersChildRoom(){
-		// 子Roomの中からピア数が少ないRoomを取得し配列に格納
-		let childRoomsHasConsumersLength = is.childrenRoom.filter(item => item._peers.size)
-		console.log(`childRoomsHasConsumersLength: ${childRoomsHasConsumersLength}`)
+		// // 子Roomの中からピア数が少ないRoomを取得し配列に格納
+		// let childRoomsHasConsumersLength = this._childrenRoom.filter(item => item._peers.size)
+		// console.log(`childRoomsHasConsumersLength: ${childRoomsHasConsumersLength}`)
+		//
+		// // 一番少ないConsumer数を入れておく
+		// let leastConsumers = Math.min(...childRoomsHasConsumersLength);
+		//
+		// // 最小のconsumerを持つRoomのインデックスを取得し、戻す
+		// return childRoomsHasConsumersLength.indexOf(leastConsumers)
 
-		// 一番少ないConsumer数を入れておく
-		let leastConsumers = Math.min(...childRoomsHasConsumersLength);
-
-		// 最小のconsumerを持つRoomのインデックスを取得し、戻す
-		return childRoomsHasConsumersLength.indexOf(leastConsumers)
-
+		// 一旦一つ目のChildRoomを渡す
+		return this._childrenRoom[0]
 	}
 
 	async createWebRtcTransport(){
@@ -657,7 +708,7 @@ class Room extends EventEmitter{
 				const webRtcTransport_options = {
 					listenIps: [
 						{
-							ip: '192.168.35.35', // replace with relevant IP address
+							ip: '192.168.10.113', // replace with relevant IP address
 							// announcedIp: '10.0.0.115',
 						}
 					],
