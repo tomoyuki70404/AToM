@@ -18362,7 +18362,14 @@ const recvFunc = async () =>{
 
 receiveOnlyBtn.addEventListener('click',recvFunc)
 
+const fileShareFun ()=>{
+  const modal = document.getElementById('modal-content');
+  modal.style.display = ""
+}
 
+
+
+fileShareBtn.addEventListener('click',fileShareFunc)
 
 var streamOnOffSwitch = (obj) =>{
     // var selectElements = $(`#selectMedia select option:selected`)
@@ -18550,7 +18557,6 @@ socket.on('captionControl',({consumerId, isCaption})=>{
 		};
 
 		 consumerElement.appendChild(captionElement)
-
 	}
 })
 

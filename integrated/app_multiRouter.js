@@ -200,45 +200,41 @@ async function getOrCreateRoom({ roomName })
 		const mediasoupWorker = getMediasoupWorker();
 
 		// Roomクラスのインスタンスが返される
-		room = await Room.create({ mediasoupWorker, roomName });
+		room = await Room.create({ mediasoupWorker, roomNameParam:roomName });
 
-		for(let i=0; i<4; i++){
+		// 一旦子Roomを３つ入れておく
+		for(var i=0; i<4; i++){
 			// 子Roomを作成し、親Roomに追加しておく
 			const mediasoupWorker = getMediasoupWorker();
 
-			console.log(`childrenRoomSize: ${room.getChildrenRoom().length}`)
+			console.log(`childrenRoomSize: ${room.getChildrenRoom()}`)
+			const roomNameParam = roomName+room.getChildrenRoom.length+i
+			console.log(`roomNameParam ${roomNameParam}`)
 
-			const parentPeers = room.getPeers();
-
-			const childRoomName = roomName + room.getChildrenRoom.length+1
-
-			// worker,roomName,親Roomにあるpeersを渡す
-			let childRoom = await Room.createChildRoom({mediasoupWorker, childRoomName , parentPeers })
+			let childRoom = await Room.create({mediasoupWorker, roomNameParam})
 
 			// 子Roomを作成し、親Roomに渡す
-			room.addChildRoom(childRoom);
+			room.setChildRoom(childRoom);
 		}
 
+
+		// roomsの配列に格納(roomNameが違うものを格納する。子Roomは入れない。)
+		rooms.set(roomName, room);
+		room.on('close', () => rooms.delete(roomName));
+
 	}
-	// else{
+	// }else{
 	// 	// 子Roomを作成し、親Roomに追加しておく
 	// 	const mediasoupWorker = getMediasoupWorker();
 	//
-	// 	console.log(`childrenRoomSize: ${room.getChildrenRoom().length}`)
+	// 	console.log(`childrenRoomSize: ${room.getChildrenRoom()}`)
+	// 	const roomNameParam = roomName+room.getChildrenRoom.length+1
 	//
-	// 	const parentPeers = room.getPeers();
-	//
-	// 	const childRoomName = roomName + room.getChildrenRoom.length+1
-	//
-	// 	// worker,roomName,親Roomにあるpeersを渡す
-	// 	let childRoom = await Room.createChildRoom({mediasoupWorker, childRoomName , parentPeers })
+	// 	let childRoom = await Room.create({mediasoupWorker, roomNameParam})
 	//
 	// 	// 子Roomを作成し、親Roomに渡す
-	// 	room.addChildRoom(childRoom);
+	// 	room.setChildRoom(childRoom);
 	// }
-	// roomsの配列に格納(roomNameが違うものを格納する。子Roomは入れない。)
-	rooms.set(roomName, room);
-	room.on('close', () => rooms.delete(roomName));
 
 	return room;
 }
