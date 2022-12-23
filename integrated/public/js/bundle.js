@@ -18555,6 +18555,7 @@ socket.on('captionControl',({consumerId, isCaption})=>{
 })
 
 const getProducers = async () => {
+  console.log("getProducers after")
   await socket.emit('getProducers', producerParams => {
 
     console.log("producerParams")
@@ -18563,6 +18564,7 @@ const getProducers = async () => {
 	//producerが１つでもあるとき
 	if(producerParams.length != 0){
 		producerParams.forEach(params=>{
+      console.log(`producer > 0`)
 			signalNewConsumerTransport(params.producerId, params.producerLabel,params.accessLevel)
 		})
 	}else{

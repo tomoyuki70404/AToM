@@ -66,6 +66,7 @@ class Room extends EventEmitter{
 			});
 		}
 
+<<<<<<< HEAD
 	setPeers(parentPeers){
 		this._peers = parentPeers
 	}
@@ -94,14 +95,30 @@ class Room extends EventEmitter{
 		this.informConsumers(socket.id, producer.id, producerLabel, accessLevel)
 	}
 
+=======
+	static createPipeToRouter(anotherRouter){
+
+
+
+	}
+
+	static canEntry(){
+		return true
+	}
+
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 
 	constructor({
 			peers,
 			roomName,
 			webRtcServer,
 			mediasoupRouter,
+<<<<<<< HEAD
 			audioLevelObserver,
 			childrenRoom
+=======
+			audioLevelObserver
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 		}){
 			super();
 			this.setMaxListeners(Infinity);
@@ -144,8 +161,11 @@ class Room extends EventEmitter{
 			// Handle audioLevelObserver.
 			// this._handleAudioLevelObserver();
 
+<<<<<<< HEAD
 			this._childrenRoom = new Array();
 
+=======
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 		}
 
 
@@ -219,6 +239,7 @@ class Room extends EventEmitter{
 							}
 						})
 
+<<<<<<< HEAD
 						this.addTransport(socket,transport, isConsume)
 					},
 					error => {
@@ -251,6 +272,14 @@ class Room extends EventEmitter{
 				)
 			}
 		})
+=======
+					this.addTransport(socket,transport, isConsume)
+				},
+				error => {
+					logger.error("createWebRtcTransport error:",error)
+				})
+			})
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 
 			socket.on('transport-connect', ({ dtlsParameters }) => {
 				console.log(`transport-connect ${socket.id}`)
@@ -259,6 +288,7 @@ class Room extends EventEmitter{
 
 			socket.on('transport-produce', async ({ kind, rtpParameters, appData, }, callback) =>{
 				console.log(`transport-produce  appData:${appData}`)
+<<<<<<< HEAD
 
 				const producerLabel = appData[0].producerLabel
 				const accessLevel = appData[0].accessLevel
@@ -435,6 +465,137 @@ class Room extends EventEmitter{
 
 							consumerTransport.close([])
 
+=======
+				const producer = await this.getTransport(socket.id).produce({
+					kind,
+					rtpParameters,
+				})
+				const producerLabel = appData[0].producerLabel
+				const accessLevel = appData[0].accessLevel
+
+				this.addProducer(socket, producer, producerLabel, accessLevel)
+				const setProducer = this._peers.get(socket.id)
+				// console.log("setProducer")
+				// console.log(setProducer)
+
+				this.informConsumers(socket.id, producer.id, producerLabel, accessLevel)
+
+				console.log(`Producer Id:${producer.id}  producer.kind:${producer.kind}`)
+
+				producer.on('transportclose', () => {
+					console.log(`transport close ${producer}`)
+					// audioLevelObserver.RemoveProducer(producer);
+					producer.close()
+				})
+
+				const peer = this._peers.get(socket.id)
+				const producers = peer.data.producers
+
+				callback({
+					id: producer.id,
+					producersExist: producers.length>1 ? true : false,
+					appData:[producerLabel],
+				})
+			})
+
+			socket.on('getProducers', callback =>{
+				try{
+					console.log(` getProducers  `)
+					let callbackProducerList = []
+
+					let producers = []
+					// this._peersに入っているすべてのsocketからproducersを探索
+					this._peers.forEach( extPeer => {
+						// 自分のソケット以外のproducerを探す　&& そのsocketのproducersが１つでもあること
+						if(extPeer.id !== socket.id  && extPeer.data.producers.size > 0){
+							extPeer.data.producers.forEach( extProducer => {
+								console.log(`producerId`)
+								// console.log(extProducer)
+								producers = [
+									...producers,
+									{socketId:extPeer.socket.id, producerId:extProducer.producer.id,producerLabel:extProducer.producerLabel,accessLevel:extProducer.accessLevel}
+								]
+							});
+
+						}
+					});
+					// console.log("producers")
+					// console.log(producers)
+
+					producers.forEach(producerData => {
+
+						if(producerData.socketId !== socket.id ){
+							// console.log("producerData.producer")
+							// console.log(producerData.producer)
+							callbackProducerList = [
+								...callbackProducerList,
+								{
+									producerId:producerData.producerId,
+									producerLabel:producerData.producerLabel,
+									accessLevel:producerData.accessLevel
+								},
+							]
+						}
+					})
+					console.log(`getProducers   socket.id${socket.id} callbackProducerList:${callbackProducerList}`)
+
+					callback(callbackProducerList)
+				}catch(error){
+
+					console.log("getProducers error",error)
+				}
+			})
+
+			socket.on('transport-recv-connect', async({dtlsParameters, serverConsumerTransportId}) =>{
+				console.log(`transport-recv-connect ${socket.id}`)
+
+				const peer = this._peers.get(socket.id)
+				let consumerTransport
+				peer.data.transports.forEach( extTransport => {
+					if(extTransport.isConsume && extTransport.transport.id == serverConsumerTransportId){
+						consumerTransport = extTransport.transport
+					}
+				});
+				await consumerTransport.connect({dtlsParameters})
+			})
+
+			socket.on('consume', async ({rtpCapabilities, remoteProducerId, serverConsumerTransportId }, callback )=>{
+				try{
+					const peer = this._peers.get(socket.id)
+					let consumerTransport
+					peer.data.transports.forEach( extTransport => {
+
+						if(extTransport.isConsume && extTransport.transport.id == serverConsumerTransportId){
+							// console.log("extTransport")
+							// console.log(extTransport)
+							consumerTransport = extTransport.transport
+						}
+					});
+					console.log(`remoteProducerId : ${remoteProducerId}`)
+					// console.log(`rtpCapabilities`)
+					// console.log(rtpCapabilities)
+					if(this._mediasoupRouter.canConsume({
+						producerId:remoteProducerId,
+						rtpCapabilities
+					})){
+						const consumer = await consumerTransport.consume({
+							producerId: remoteProducerId,
+							rtpCapabilities,
+							paused:true,
+						})
+
+						consumer.on('transportclose',() =>{
+							console.log('transport close from consumer')
+						})
+
+						consumer.on('producerclose', () =>{
+							console.log(`producer of consumer close`)
+
+							socket.emit('producer-closed', { remoteProducerId })
+
+							consumerTransport.close([])
+
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 							const peer = this._peers.get(socket.id)
 							peer.data.transports.delete(socket.id)
 							consumer.close()
@@ -530,6 +691,7 @@ class Room extends EventEmitter{
 	*/
 	close(){
 		logger.debug('close()');
+<<<<<<< HEAD
 
 		this._closed = true;
 
@@ -539,6 +701,13 @@ class Room extends EventEmitter{
 
 	getRoomName(){
 		return this._roomName
+=======
+
+		this._closed = true;
+
+		// Close the mediasoup Router.
+		this._mediasoupRouter.close();
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 	}
 
 	getConsumerSize(){
@@ -605,10 +774,17 @@ class Room extends EventEmitter{
 			}
 			console.log("peer")
 			peer.data.consumers.set(consumer.id, consumerData )
+<<<<<<< HEAD
 
 			const currentConsumersNum = this.getConsumerSize()
 			console.log(`     Consumer Size:${currentConsumersNum}`)
 
+=======
+
+			const currentConsumersNum = this.getConsumerSize()
+			console.log(`     Consumer Size:${currentConsumersNum}`)
+
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 		}catch(error){
 			console.log(`add Consumer Error ${error}`)
 		}
@@ -708,7 +884,11 @@ class Room extends EventEmitter{
 				const webRtcTransport_options = {
 					listenIps: [
 						{
+<<<<<<< HEAD
 							ip: '192.168.10.113', // replace with relevant IP address
+=======
+							ip: '192.168.35.35', // replace with relevant IP address
+>>>>>>> 2f13ae1fd2600c4a4fbc6096bf41e481978b6350
 							// announcedIp: '10.0.0.115',
 						}
 					],
