@@ -19,13 +19,14 @@ const bodyParser = require('body-parser');
 const { AwaitQueue } = require('awaitqueue');
 //Loggerモジュール
 const Logger = require('./lib/Logger');
-
+//Roomモジュール
+const Room = require('./lib/Room');
 //utilsモジュール：JSONのコピーメソッドを持つ
 const utils = require('./lib/utils');
 
 const logger = new Logger();
 
-const SFUManager = require('./lib/SFUManager');
+// const { Server } = require('socket.io')
 
 // ルームを非同期で処理するためのqueue.
 // @type {AwaitQueue}
@@ -95,10 +96,10 @@ async function run(){
  */
 async function runMediasoupWorkers()
 {
-	const { runWorkersNum } = config.mediasoup;
-	logger.info('running %d mediasoup Workers...', runWorkersNum);
+	const { numWorkers } = config.mediasoup;
+	logger.info('running %d mediasoup Workers...', numWorkers);
 
-	for (let i = 0; i < runWorkersNum; ++i)
+	for (let i = 0; i < numWorkers; ++i)
 	{
 		console.log(`run worker${i}`)
 		const worker = await mediasoup.createWorker(
@@ -360,9 +361,181 @@ async function runHttpsServer()
 	});
 }
 
-async function runSFUManager()
+async function runWebSocketServer()
 {
-	const sfuManager = await SFUManager.start(httpsServer);
+	logger.info('running WebSocketServer...');
 
-	sfuManager.run();
+	//socket.ioでの書き換えパターン
+	
+	// webSocketServer = new Server(httpsServer);
+	// webSocketServer.on('connection', async socket =>{
+	// 	// The client indicates the roomName and peerId in the URL query.
+	// 	const roomName = socket.roomName;
+	// 	const socketId = socket.id;
+	//
+	// 	socket.emit('connection-success', {
+	// 		socketId: socket.id,
+	// 	})
+	//
+	// 	if (!roomName || !socketId)
+	// 	{
+	// 		reject(400, 'Connection request without roomName and/or peerId');
+	//
+	// 		return;
+	// 	}
+	//
+	//
+	// 	logger.info(
+	// 		'websocket connection request [roomName:%s, peerId:%s, address:%s, origin:%s]',
+	// 		roomName, peerId, info.socket.remoteAddress, info.origin);
+	//
+	//
+	// 		// Serialize this code into the queue to avoid that two peers connecting at
+	// 		// the same time with the same roomName create two separate rooms with same
+	// 		// roomName.
+	// 		queue.push(async () =>
+	// 		{
+	// 			const room = await getOrCreateRoom({ roomName });
+	//
+	// 			// Accept the protoo WebSocket connection.
+	// 			const protooWebSocketTransport = accept();
+	//
+	// 			room.handleProtooConnection({ peerId, protooWebSocketTransport });
+	// 		})
+	// 		.catch((error) =>
+	// 		{
+	// 			logger.error('room creation or room joining failed:%o', error);
+	//
+	// 			reject(error);
+	// 		});
+	// })
+	webSocketServer = new Server(httpsServer);
+	webSocketServer.on('connection', async socket =>{
+		// The client indicates the roomId and peerId in the URL query.
+		const roomId = socket.roomId;
+		const socketId = socket.id;
+
+		socket.emit('connection-success', {
+			socketId: socket.id,
+		})
+
+		if (!roomId || !socketId)
+		{
+			reject(400, 'Connection request without roomId and/or peerId');
+
+			return;
+		}
+
+
+		logger.info(
+			'websocket connection request [roomId:%s, peerId:%s, address:%s, origin:%s]',
+			roomId, peerId, info.socket.remoteAddress, info.origin);
+
+
+			// Serialize this code into the queue to avoid that two peers connecting at
+			// the same time with the same roomId create two separate rooms with same
+			// roomId.
+			queue.push(async () =>
+			{
+				const room = await getOrCreateRoom({ roomId });
+
+				// Accept the protoo WebSocket connection.
+				const protooWebSocketTransport = accept();
+
+				room.handleProtooConnection({ peerId, protooWebSocketTransport });
+			})
+			.catch((error) =>
+			{
+				logger.error('room creation or room joining failed:%o', error);
+
+				reject(error);
+			});
+	})
+>>>>>>> 182c4ffbe2fa22c3df7594e1c1f662893f3085cb
+	// Create the protoo WebSocket server.
+
+
+	protooWebSocketServer = new protoo.WebSocketServer(httpsServer,
+		{
+			maxReceivedFrameSize     : 960000, // 960 KBytes.
+			maxReceivedMessageSize   : 960000,
+			fragmentOutgoingMessages : true,
+			fragmentationThreshold   : 960000
+		});
+
+	// Handle connections from clients.
+	protooWebSocketServer.on('connectionrequest', (info, accept, reject) =>
+	{
+		// The client indicates the roomName and peerId in the URL query.
+		const u = url.parse(info.request.url, true);
+		const roomName = u.query['roomName'];
+		const peerId = u.query['peerId'];
+
+		if (!roomName || !peerId)
+		{
+			reject(400, 'Connection request without roomName and/or roomName');
+
+			return;
+		}
+
+		logger.info(
+			'protoo connection request [roomName:%s, peerId:%s, address:%s, origin:%s]',
+			roomName, peerId, info.socket.remoteAddress, info.origin);
+
+		// Serialize this code into the queue to avoid that two peers connecting at
+		// the same time with the same roomName create two separate rooms with same
+		// roomName.
+		queue.push(async () =>
+		{
+			const room = await getOrCreateRoom({ roomName });
+
+			// Accept the protoo WebSocket connection.
+			const protooWebSocketTransport = accept();
+
+			room.handleProtooConnection({ peerId, protooWebSocketTransport });
+		})
+			.catch((error) =>
+			{
+				logger.error('room creation or room joining failed:%o', error);
+
+				reject(error);
+			});
+	});
+}
+
+/**
+ * Get next mediasoup Worker.
+ */
+function getMediasoupWorker()
+{
+	const worker = mediasoupWorkers[nextMediasoupWorkerIdx];
+
+	if (++nextMediasoupWorkerIdx === mediasoupWorkers.length)
+		nextMediasoupWorkerIdx = 0;
+
+	return worker;
+}
+
+/**
+ * Get a Room instance (or create one if it does not exist).
+ */
+async function getOrCreateRoom({ roomName })
+{
+	//serverで保持してるrooms[Mas()]から取得する
+	let room = rooms.get(roomName);
+
+	// If the Room does not exist create a new one.
+	if (!room)
+	{
+		logger.info('creating a new Room [roomName:%s]', roomName);
+
+		const mediasoupWorker = getMediasoupWorker();
+
+		room = await Room.create({ mediasoupWorker, roomName });
+
+		rooms.set(roomName, room);
+		room.on('close', () => rooms.delete(roomName));
+	}
+
+	return room;
 }
