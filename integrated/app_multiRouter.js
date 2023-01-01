@@ -188,18 +188,20 @@ function getMediasoupWorker()
 async function getOrCreateRoom({ roomName })
 {
 	//serverで保持してるrooms[Mas()]から取得する
-	let room = rooms.get(roomName);
+	let room1 = rooms.get(roomName);
 	console.log(` getOrCreateRoom ${roomName}`)
 
 	// 親RoomにあたるRoomを作成
+
 	// If the Room does not exist create a new one.
-	if (room == undefined)
+	if (room1 == undefined)
 	{
 		console.log('creating a new Room [roomName:%s]', roomName);
 
 		const mediasoupWorker = getMediasoupWorker();
 
 		// Roomクラスのインスタンスが返される
+
 		room = await Room.create({ mediasoupWorker, roomNameParam:roomName });
 
 		// 一旦子Roomを３つ入れておく
