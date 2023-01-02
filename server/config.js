@@ -35,7 +35,19 @@ module.exports =
 				'x-google-start-bitrate': 1000
 			  }
 			}
-		]
+		],
+		webRtcTransportOptions :
+		{
+			listenIps: [
+				{
+					ip: '192.168.10.113', // replace with relevant IP address
+					// announcedIp: '10.0.0.115',
+				}
+			],
+			enableUdp: true,
+			enableTcp: true,
+			preferUdp: true,
+		}
 	}
 
 
