@@ -49,9 +49,20 @@ class RoomManager{
 		})
 
 		socket.on('joinRoom', async({ roomName}, callback) =>{
+			// 全Roomで処理ができるか確認する
+			//
 
 
+		})
 
+		socket.on('createWebRtcTransport', async({ consumer }, callback )=> {
+
+			// consumer == trueのときはChildRoomからtransportを取得
+			if(consumer == true){
+
+			}else{ //consumer == falseのときは親Roomからtransportを取得
+
+			}
 
 
 
