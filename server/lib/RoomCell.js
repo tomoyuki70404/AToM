@@ -58,10 +58,6 @@ class RoomCell{
 	}
 
 
-	getTransports(socket){
-		const peer = this._peers.get(socket.id)
-		return peer.transports
-	}
 
 
 	async createWebRtcTransport(){
@@ -165,6 +161,11 @@ class RoomCell{
 
 	getPeers(){
 		return this._peers
+	}
+	
+	getTransports(socket){
+		const peer = this._peers.get(socket.id)
+		return peer.transports
 	}
 
 	// 引数のsocket以外のsocketに紐づくconsumersに通知する

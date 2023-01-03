@@ -19,6 +19,13 @@ class RoomManager{
 		this._workers = workers
 
 		this._isHandleSocket = false
+
+		// 1Clientにつき１Roomに対して送受信で2つのtransportをつなぐ
+		// {String} producer.id
+		// {Array} transports
+		//	-	{bool} isConsume
+		// 	-	{transport} transport
+		this._pipeList = new Map();
 	}
 
 	// RoomManagerを作り、mainのRoomを１つ入れておく
@@ -111,10 +118,31 @@ class RoomManager{
 					// });
 
 				// ==============================================
+				this._roomCells.forEach( (roomCell,index) => {
+					// RoomCell[0](=親Room)以外のRoomCellからtransportを探す
+					if( index != 0 ){
+						roomCell.getPeers().forEach( peer => {
+							// producersにremoteProducerIdがあり、transportsにtransportが入っているとき
+							if(peer.producers.has(remoteProducerId) && peer.transports.size > 0){
 
-				// 一旦rooms[1]の子Roomからtransportを渡す
-				const childRoom = this._roomCells.at(1)
-				childRoom.createWebRtcTransport().then(
+								peer.transports.forEach( transportData => {
+									if(transportData.isConsume == true){
+										callback({
+											transportParamfromServer:{
+												id: transportData.transport.id,
+												iceParameters: transportData.transport.iceParameters,
+												iceCandidates: transportData.transport.iceCandidates,
+												dtlsParameters: transportData.transport.dtlsParameters
+											}
+										})
+									}
+								});
+							}
+						});
+					}
+				});
+
+				roomCell.createWebRtcTransport().then(
 					transport => {
 						callback({
 							transportParamfromServer:{
@@ -126,9 +154,11 @@ class RoomManager{
 						})
 						console.log("createWebRtcTransport childRoom")
 						console.log(`transportId : ${transport.id}`)
-						childRoom.addTransport(socket, transport, consumer)
+						roomCell.addTransport(socket, transport, consumer)
 					}
 				)
+
+
 
 			}else{
 
