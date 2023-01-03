@@ -7,11 +7,11 @@ module.exports =
 	{
 		listenIp   : '192.168.10.113',
 		listenPort :  4443,
-		tls        :
-		{
-			cert : process.env.HTTPS_CERT_FULLCHAIN || `${__dirname}/certs/fullchain.pem`,
-			key  : process.env.HTTPS_CERT_PRIVKEY || `${__dirname}/certs/privkey.pem`
-		}
+		// tls        :
+		// {
+		// 	cert : `./ssl/cert.pem`,
+		// 	key  : `./ssl/key.pem`
+		// }
 	},
 
 	// mediasoupに関する設定
@@ -36,6 +36,11 @@ module.exports =
 			  }
 			}
 		],
+		workerSettings :
+		{
+			rtcMinPort : 2000,
+			rtcMaxPort : 2999
+		},
 		webRtcTransportOptions :
 		{
 			listenIps: [
@@ -47,6 +52,24 @@ module.exports =
 			enableUdp: true,
 			enableTcp: true,
 			preferUdp: true,
+		},
+		webRtcServerOptions :
+		{
+			listenInfos :
+			[
+				{
+					protocol    : 'udp',
+					ip          : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP,
+					port        : 4444
+				},
+				{
+					protocol    : 'tcp',
+					ip          : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP,
+					port        : 4444
+				}
+			],
 		}
 	}
 

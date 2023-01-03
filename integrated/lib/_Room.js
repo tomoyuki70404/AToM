@@ -3,44 +3,25 @@ const EventEmitter = require('events').EventEmitter;
 const Logger = require('./Logger');
 
 const config = require('./config.js');
+
 const logger = new Logger('Room');
 
 
 class Room extends EventEmitter{
 
-	// 既にルームが無い前提
-	static async create({ mediasoupWorker, roomNameParam })
-	{
-		console.log('create() [roomName:%s]', roomNameParam);
-		console.log(config)
-		// Router media codecs.
 
-		const peers = new Map()
 
-		// const { mediaCodecs } = config.mediasoup.routerOptions;
-		const { mediaCodecs } = {
-			mediaCodecs :
-			[
-			  {
-			    kind: 'audio',
-			    mimeType: 'audio/opus',
-			    clockRate: 48000,
-			    channels: 2,
-			  },
-			  {
-				kind: 'video',
-				mimeType: 'video/vp8',
-				clockRate: 90000,
-				parameters:
-				{
-				  'x-google-start-bitrate': 1000
-				}
-			  },
-			]
+	setProducer(socket, pipeProducer, producerLabel, accessLevel){
+		const producerData ={
+			socket:socket,
+			producer:pipeProducer,
+			producerLabel:producerLabel,
+			accessLevel:accessLevel
 		}
 
 		// Create a mediasoup Router.
 		const mediasoupRouter = await mediasoupWorker.createRouter({ mediaCodecs, });
+
 
 		// 一旦音声デバイスは最大50まで取れるとしてみる（無理だったら変更 MAX8までって何かに書いてあった気がするけど）
 		// Create a mediasoup AudioLevelObserver.
@@ -51,48 +32,45 @@ class Room extends EventEmitter{
 				interval   : 250
 			});
 
-		// const bot = await Bot.create({ mediasoupRouter });
-
-		const childrenRoom = new Array();
+		const childrenRoom = null
 
 		return new Room(
 			{
-				peers,
-				roomName:roomNameParam,
+				parantPeers,
+				roomName,
 				webRtcServer : mediasoupWorker.appData.webRtcServer,
 				mediasoupRouter,
 				audioLevelObserver,
 				childrenRoom
 			});
-		}
+	}
 
-	setPeers(parentPeers){
-		this._peers = parentPeers
+
+	getPeers(){
+		return this._peers
 	}
 
 	getChildrenRoom(){
 		return this._childrenRoom
 	}
 
-	// 親Roomで子Roomをセット
-	// 子Roomに親Roomのpeerを参照させる
-	setChildRoom(childRoom){
-		childRoom.setPeers(this._peers)
+	// 親Roomで子Roomを追加する
+	addChildRoom(childRoom){
 		this._childrenRoom.push(childRoom)
 	}
 
+	// getProducerするときにproducerがどこのRoomに属するかをRouterで登録するため
 	setProducer(socket, pipeProducer, producerLabel, accessLevel){
-		const producerData ={
-			socket:socket,
-			producer:pipeProducer,
-			producerLabel:producerLabel,
-			accessLevel:accessLevel
-		}
-		this._peers.set(socket.id, producerData)
-		this.addProducer(socket, producer, producerLabel, accessLevel)
-
-		this.informConsumers(socket.id, producer.id, producerLabel, accessLevel)
+		this.addProducer(socket, pipeProducer, producerLabel, accessLevel)
 	}
+
+	getWebRtcTransrpot(){
+		return this.createWebRtcTransport()
+	}
+
+	// static setTransport(socket, transport, isConsume){
+	// 	this.addTransport(socket,transport, isConsume)
+	// }
 
 	constructor({
 			peers,
@@ -144,7 +122,6 @@ class Room extends EventEmitter{
 			// this._handleAudioLevelObserver();
 
 			this._childrenRoom = new Array();
-
 
 		}
 
@@ -218,6 +195,7 @@ class Room extends EventEmitter{
 								dtlsParameters: transport.dtlsParameters,
 							}
 						})
+
 						this.addTransport(socket,transport, isConsume)
 					},
 					error => {
@@ -241,7 +219,7 @@ class Room extends EventEmitter{
 						// console.log(`this room is : ${this._roomName}`)
 						// console.log(`child room is : ${childRoom.getRoomName()}`)
 
-						console.log(`created transport ${transport.id}`)
+
 						childRoom.addTransport(socket,transport, isConsume)
 					},
 					error => {
@@ -282,6 +260,8 @@ class Room extends EventEmitter{
 					// 親RoomでaddProducer =>子Roomにもpeersは共有される
 					this.addProducer( socket, producer, producerLabel , accessLevel )
 
+					// 使わないけど一旦書いておく
+					// client側のコードも改修が必要になるため
 					const peer = this._peers.get(socket.id)
 					const producers = peer.data.producers
 
@@ -330,6 +310,30 @@ class Room extends EventEmitter{
 						appData:[producerLabel],
 					})
 				}
+				// else{
+				// 	// 子Roomとしてproducerを追加する場合
+				//
+				// 	this.addProducer(socket, producer, producerLabel, accessLevel)
+				//
+				// 	this.informConsumers(socket.id, producer.id, producerLabel, accessLevel)
+				//
+				// 	console.log(`Producer Id:${producer.id}  producer.kind:${producer.kind}`)
+				//
+				// 	producer.on('transportclose', () => {
+				// 		console.log(`transport close ${producer}`)
+				// 		// audioLevelObserver.RemoveProducer(producer);
+				// 		producer.close()
+				// 	})
+				//
+				// 	const peer = this._peers.get(socket.id)
+				// 	const producers = peer.data.producers
+				//
+				// 	callback({
+				// 		id: producer.id,
+				// 		producersExist: producers.length>1 ? true : false,
+				// 		appData:[producerLabel],
+				// 	})
+				// }
 			})
 
 			socket.on('getProducers', callback =>{
@@ -344,16 +348,20 @@ class Room extends EventEmitter{
 						if(extPeer.id !== socket.id  && extPeer.data.producers.size > 0){
 							extPeer.data.producers.forEach( extProducer => {
 								console.log(`producerId`)
-								// console.log(extProducer)
-								producers = [
-									...producers,
-									{
-										socketId:extPeer.socket.id,
-										producerId:extProducer.producer.id,
-										producerLabel:extProducer.producerLabel,
-										accessLevel:extProducer.accessLevel
-									}
-								]
+
+								// 子Roomにあたるproducerのとき(=子RoomにあるpipeProducerをconsumerに渡す)
+								if(extPeer.router != null){
+									producers = [
+										...producers,
+										{
+											socketId:extPeer.socket.id,
+											producerId:extProducer.producer.id,
+											producerLabel:extProducer.producerLabel,
+											accessLevel:extProducer.accessLevel,
+											router:extProducer.router
+										}
+									]
+								}
 							});
 
 						}
@@ -390,6 +398,8 @@ class Room extends EventEmitter{
 
 				const peer = this._peers.get(socket.id)
 				let consumerTransport
+
+				// transportsの中からtransportを抽出
 				peer.data.transports.forEach( extTransport => {
 					if(extTransport.isConsume && extTransport.transport.id == serverConsumerTransportId){
 						consumerTransport = extTransport.transport
@@ -417,7 +427,6 @@ class Room extends EventEmitter{
 						producerId:remoteProducerId,
 						rtpCapabilities
 					})){
-						console.log(`consume transport : ${consumerTransport.id}`)
 						const consumer = await consumerTransport.consume({
 							producerId: remoteProducerId,
 							rtpCapabilities,
@@ -435,13 +444,12 @@ class Room extends EventEmitter{
 
 							consumerTransport.close([])
 
-
 							const peer = this._peers.get(socket.id)
 							peer.data.transports.delete(socket.id)
 							consumer.close()
 							peer.data.consumers.delete(socket.id)
 						})
-						console.log(`this roomName: ${this._roomName}`)
+
 						this.addConsumer(socket, consumer)
 
 						const consumerParams = {
@@ -585,12 +593,16 @@ class Room extends EventEmitter{
 	addProducer(socket, producer, producerLabel, accessLevel){
 		console.log(`addProducer  producer:${producer}  producerLabel:${producerLabel} accessLevel:${accessLevel}`)
 
+		// 子Roomに属するproducer(=pipeProducer)の場合はrouterに子RoomのRouterを入れる
+		// 親Roomのrouterフィールドにはnullを入れておく
+		const router = this._childrenRoom == null ? this._mediasoupRouter : null;
 		const peer = this._peers.get(socket.id)
 		const producerData ={
 			socket:socket,
 			producer:producer,
 			producerLabel:producerLabel,
-			accessLevel:accessLevel
+			accessLevel:accessLevel,
+			router:router
 		}
 		peer.data.producers.set(producer.id, producerData )
 	}
@@ -709,7 +721,7 @@ class Room extends EventEmitter{
 				const webRtcTransport_options = {
 					listenIps: [
 						{
-							ip: '192.168.10.113', // replace with relevant IP address
+							ip: '192.168.35.35', // replace with relevant IP address
 							// announcedIp: '10.0.0.115',
 						}
 					],
@@ -737,4 +749,3 @@ class Room extends EventEmitter{
 		})
 	}
 }
-module.exports = Room;

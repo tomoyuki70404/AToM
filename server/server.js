@@ -7,8 +7,8 @@ const fs = require('fs');
 const https = require('https');
 // urlモジュール
 const url = require('url');
-// protoo-serverモジュール：websocket部分
-const protoo = require('protoo-server');
+// // protoo-serverモジュール：websocket部分
+// const protoo = require('protoo-server');
 //mediasoupモジュール
 const mediasoup = require('mediasoup');
 //expressモジュール
@@ -20,12 +20,14 @@ const { AwaitQueue } = require('awaitqueue');
 //Loggerモジュール
 const Logger = require('./lib/Logger');
 
-//utilsモジュール：JSONのコピーメソッドを持つ
-const utils = require('./lib/utils');
+
 
 const logger = new Logger();
 
 const SFUManager = require('./lib/SFUManager');
+
+const path = require( 'path')
+
 
 // ルームを非同期で処理するためのqueue.
 // @type {AwaitQueue}
@@ -51,14 +53,6 @@ let protooWebSocketServer;
 // // @type {protoo.WebSocketServer}
 // let webSocketServer;
 
-// mediasoup Workers.
-// @type {Array<mediasoup.Worker>}
-const mediasoupWorkers = [];
-
-// Index of next mediasoup Worker to use.
-// @type {Number}
-let nextMediasoupWorkerIdx = 0;
-
 let webRTCServerCount = 0
 
 run();
@@ -67,272 +61,41 @@ async function run(){
 
 	// await svManager();
 	console.log("running")
-	// Run a mediasoup Worker.
-	await runMediasoupWorkers();
+
 	// Create Express app.
-	await createExpressApp();
+	await runExpressApp();
 	// Create HttpServer
 	await runHttpsServer();
 
-	// Run a protoo WebSocketServer.
-	await runWebSocketServer();
+	await runSFUManager();
 
-	//定時にログを取得し、定時監視する
-	// Log rooms status every X seconds.
-	setInterval(() =>
-	{
-		for (const room of rooms.values())
-		{
-			room.logStatus();
-		}
-	}, 120000);
 }
 
 
-/**
- * Launch as many mediasoup Workers as given in the configuration file.
- * WorkerをConfig.jsで設定した数、起動する
- */
-async function runMediasoupWorkers()
-{
-	const { runWorkersNum } = config.mediasoup;
-	logger.info('running %d mediasoup Workers...', runWorkersNum);
+async function runExpressApp(){
 
-	for (let i = 0; i < runWorkersNum; ++i)
-	{
-		console.log(`run worker${i}`)
-		const worker = await mediasoup.createWorker(
-			{
-				logLevel   : config.mediasoup.workerSettings.logLevel,
-				logTags    : config.mediasoup.workerSettings.logTags,
-				rtcMinPort : Number(config.mediasoup.workerSettings.rtcMinPort),
-				rtcMaxPort : Number(config.mediasoup.workerSettings.rtcMaxPort)
-			});
+	app = express()
 
-		worker.on('died', () =>
-		{
-			logger.error(
-				'mediasoup Worker died, exiting  in 2 seconds... [pid:%d]', worker.pid);
+	app.get('*', (req, res, next) => {
+	    const path = '/sfu/'
+	    try{
+	        if (req.path.indexOf(path) == 0 && req.path.length > path.length && req.protocol == 'https'){
+				console.log("remoteAddress")
+				var remoteAddress = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+				console.log(remoteAddress)
+	            return next()
+	        }else{
+	            return res.redirect(`https://${req.get('host')}${req.originalUrl}`)
+	        }
+	    }catch(err){
+	        logger.error(err)
+	    }
+	    res.send(`https://{サーバのIPアドレス}/sfu/tvmas のアドレスを再度確認してアクセスしてください`)
+	    console.log("アドレス再確認 アクセス")
+	})
 
-			//10秒後にプロセスを終了する
-			setTimeout(() => process.exit(1), 2000);
-		});
-
-		mediasoupWorkers.push(worker);
-
-		// Each mediasoup Worker will run its own WebRtcServer, so those cannot
-		// share the same listening ports. Hence we increase the value in config.js
-		// for each Worker.
-		if (process.env.MEDIASOUP_USE_WEBRTC_SERVER !== 'false')
-		{
-			// Each mediasoup Worker will run its own WebRtcServer, so those cannot
-			// share the same listening ports. Hence we increase the value in config.js
-			// for each Worker.
-			const webRtcServerOptions = utils.clone(config.mediasoup.webRtcServerOptions);
-			const portIncrement = mediasoupWorkers.length - 1;
-
-			console.log(portIncrement)
-			for (const listenInfo of webRtcServerOptions.listenInfos)
-			{
-				listenInfo.port += portIncrement;
-			}
-
-			const webRtcServer = await worker.createWebRtcServer(webRtcServerOptions);
-
-			worker.appData.webRtcServer = webRtcServer;
-		}
-
-		// Log worker resource usage every X seconds.
-		setInterval(async () =>
-		{
-			const usage = await worker.getResourceUsage();
-
-			logger.info('mediasoup Worker resource usage [pid:%d]: %o', worker.pid, usage);
-		}, 120000);
-	}
-}
-
-async function createExpressApp(){
-	logger.info('create Express App');
-
-	//webappのインスタンス生成
-	expressApp = express();
-
-	//httpsリクエストをjsonとして解釈
-	expressApp.use(bodyParser.json());
-
-	/**
-	 * For every API request, verify that the roomName in the path matches and
-	 * existing room.
-	 */
-	expressApp.param(
-		'roomName', (req, res, next, roomName) =>
-		{
-			// The room must exist for all API requests.
-			if (!rooms.has(roomName))
-			{
-				const error = new Error(`room with id "${roomName}" not found`);
-
-				error.status = 404;
-				throw error;
-			}
-			//serverで保持してるrooms[Map()]にroomNameのroomがあるか検索し、結果を返す
-			req.room = rooms.get(roomName);
-
-			next();
-		});
-
-	/**
-	 * API GET resource that returns the mediasoup Router RTP capabilities of
-	 * the room.
-	 */
-	// expressApp.paramでreq.roomにrooms[Mas()]で取得したroomNameに合致したルームを代入している。
- 	// dataにはそのroomでgetRouterRtpCapabilities()をした結果を返す
-	expressApp.get(
-		'/rooms/:roomName', (req, res) =>
-		{
-			const data = req.room.getRouterRtpCapabilities();
-
-			res.status(200).json(data);
-		});
-
-	/**
-	 * POST API to create a Broadcaster.
-	 */
-	expressApp.post(
-		'/rooms/:roomName/broadcasters', async (req, res, next) =>
-		{
-			const {
-				id,
-				displayName,
-				device,
-				rtpCapabilities
-			} = req.body;
-
-			try
-			{
-				const data = await req.room.createBroadcaster(
-					{
-						id,
-						displayName,
-						device,
-						rtpCapabilities
-					});
-
-				res.status(200).json(data);
-			}
-			catch (error)
-			{
-				next(error);
-			}
-		});
-
-	/**
-	* DELETE API to delete a Broadcaster.
-	*/
-	expressApp.delete(
-	'/rooms/:roomName/broadcasters/:broadcasterId', (req, res) =>
-	{
-		const { broadcasterId } = req.params;
-
-		req.room.deleteBroadcaster({ broadcasterId });
-
-		res.status(200).send('broadcaster deleted');
-	});
-
-	/**
-	 * POST API to create a mediasoup Transport associated to a Broadcaster.
-	 * It can be a PlainTransport or a WebRtcTransport depending on the
-	 * type parameters in the body. There are also additional parameters for
-	 * PlainTransport.
-	 */
-	expressApp.post(
-		'/rooms/:roomName/broadcasters/:broadcasterId/transports',
-		async (req, res, next) =>
-		{
-			const { broadcasterId } = req.params;
-			const { type, rtcpMux, comedia, sctpCapabilities } = req.body;
-
-			try
-			{
-				const data = await req.room.createBroadcasterTransport(
-					{
-						broadcasterId,
-						type,
-						rtcpMux,
-						comedia,
-						sctpCapabilities
-					});
-
-				res.status(200).json(data);
-			}
-			catch (error)
-			{
-				next(error);
-			}
-		});
-
-	/**
-	 * POST API to create a mediasoup Producer associated to a Broadcaster.
-	 * The exact Transport in which the Producer must be created is signaled in
-	 * the URL path. Body parameters include kind and rtpParameters of the
-	 * Producer.
-	 */
-	expressApp.post(
-		'/rooms/:roomName/broadcasters/:broadcasterId/transports/:transportId/producers',
-		async (req, res, next) =>
-		{
-			const { broadcasterId, transportId } = req.params;
-			const { kind, rtpParameters } = req.body;
-
-			try
-			{
-				const data = await req.room.createBroadcasterProducer(
-					{
-						broadcasterId,
-						transportId,
-						kind,
-						rtpParameters
-					});
-
-				res.status(200).json(data);
-			}
-			catch (error)
-			{
-				next(error);
-			}
-		});
-
-	/**
-	 * POST API to create a mediasoup Consumer associated to a Broadcaster.
-	 * The exact Transport in which the Consumer must be created is signaled in
-	 * the URL path. Query parameters must include the desired producerId to
-	 * consume.
-	 */
-	expressApp.post(
-		'/rooms/:roomName/broadcasters/:broadcasterId/transports/:transportId/consume',
-		async (req, res, next) =>
-		{
-			const { broadcasterId, transportId } = req.params;
-			const { producerId } = req.query;
-
-			try
-			{
-				const data = await req.room.createBroadcasterConsumer(
-					{
-						broadcasterId,
-						transportId,
-						producerId
-					});
-
-				res.status(200).json(data);
-			}
-			catch (error)
-			{
-				next(error);
-			}
-		});
-
+	// app.use('send/sfu/room',express.static(path.join(__dirname, 'public/sendOnly')))
+	app.use('/sfu/:room', express.static(path.join(__dirname, 'public')))
 }
 
 
@@ -340,29 +103,31 @@ async function createExpressApp(){
  * Create a Node.js HTTPS server. It listens in the IP and port given in the
  * configuration file and reuses the Express application as request listener.
  */
-async function runHttpsServer()
-{
-	logger.info('running an HTTPS server...');
+ async function runHttpsServer()
+ {
+ 	// SSL cert for HTTPS access
+ 	const options = {
+ 	  key: fs.readFileSync('./ssl/key.pem', 'utf-8'),
+ 	  cert: fs.readFileSync('./ssl/cert.pem', 'utf-8')
+ 	}
 
-	// HTTPS server for the protoo WebSocket server.
-	const tls =
-	{
-		cert : fs.readFileSync(config.https.tls.cert),
-		key  : fs.readFileSync(config.https.tls.key)
-	};
+ 	httpsServer = https.createServer(options, app)
+ 	// await new Promise((resolve)=>{
+ 	// 	httpsServer.listen(3000, () => {
+ 	// 		console.log('listening on port: ' + 3000)
+ 	// 	})
+ 	// })
+ 	httpsServer.listen(3000, () => {
+ 		console.log('listening on port: ' + 3000)
+ 	})
+ }
 
-	httpsServer = https.createServer(tls, expressApp);
 
-	await new Promise((resolve) =>
-	{
-		httpsServer.listen(
-			Number(config.https.listenPort), config.https.listenIp, resolve);
-	});
-}
 
 async function runSFUManager()
 {
-	const sfuManager = await SFUManager.start(httpsServer);
+	const sfuManager = await SFUManager.create(httpsServer);
 
 	sfuManager.run();
+
 }

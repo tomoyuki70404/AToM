@@ -1,6 +1,9 @@
 // 設定ファイル
 const config = require('../config');
 
+//utilsモジュール：JSONのコピーメソッドを持つ
+const utils = require('./utils');
+
 // websocketサーバ
 const { Server } = require( 'socket.io')
 
@@ -8,19 +11,19 @@ const { Server } = require( 'socket.io')
 const mediasoup = require('mediasoup');
 
 //awaitqueueモジュール
-const { AwaitQueue } = require( 'awaitqueue')
+const { AwaitQueue } = require('awaitqueue')
 
-const RoomManager = require('./lib/RoomManager')
+// ルームを非同期で処理するためのqueue.
+// @type {AwaitQueue}
+let queue = new AwaitQueue();
 
+const RoomManager = require('./RoomManager')
 
 class SFUManager {
 
 	constructor({
-		workers,
-		roomManagers,
-		workers,
 		httpsServer,
-		websocketServer
+		workers
 	}){
 
 		this._workers = workers;
@@ -29,39 +32,26 @@ class SFUManager {
 
 		this._httpsServer = httpsServer;
 
-		this._websocketServer = websocketServer;
-
 	}
 
 
-	static async start(httpsServer){
+	static async create(httpsServer){
 
-		// workerを作成し保持
-		const workers = await startMediasoupWorkers();
-		const roomManagers = new Array();
-		const websocketServer = runWebSocketServer(httpsServer);
+		const workers = await this.startMediasoupWorkers();
 
 		return new SFUManager(
 		{
-			workers : workers,
-			roomManagers : roomManagers,
-			httpsServer: httpsServer,
-			websockerServer : websocketServer
+			httpsServer,
+			workers
 		});
 
 	}
-
-	// startで各要素を作成し、RoomManagerを動かす
-	run(){
-		await runWebSocketServer();
-	}
-
 
 	/**
 	 * Launch as many mediasoup Workers as given in the configuration file.
 	 * WorkerをConfig.jsで設定した数、起動する
 	 */
-	async startMediasoupWorkers()
+	static async startMediasoupWorkers()
 	{
 		const mediasoupWorkers = new Array();
 		const { runWorkersNum } = config.mediasoup;
@@ -125,7 +115,9 @@ class SFUManager {
 		// mediasoupのnamespaceであるsocketを作成
 		const webSocketServerConnection = io.of('/mediasoup')
 
-		webSocketServerConnection.on('connection',async socket =>{
+		console.log(`runWebSocketServer`)
+
+		webSocketServerConnection.on('connection', async socket =>{
 			const url = "https://"+socket.handshake.headers.host+"/sfu/"
 			const diffRoomNameLength = socket.handshake.headers.referer.length - url.length
 			const roomName = socket.handshake.headers.referer.substr(url.length,diffRoomNameLength-1)
@@ -134,34 +126,43 @@ class SFUManager {
 
 			queue.push(async () =>{
 				// RoomManagerを作成or取得する
+				console.log(`queue push`)
+				const roomManager = await this.getOrCreateRoomManager(roomName)
 
-				const workers = this._workers;
-
-				const roomManager = getOrCreateRoomManager(roomName)
-
+				console.log(`handle connection`)
 				roomManager.handleConnection(socket)
-
 			})
 		})
 
 	}
 
 	// RoomManagerがない場合RoomManagerを作成して返す
-	getOrCreateRoomManager(roomName){
-		const roomManager
+	async getOrCreateRoomManager(roomName){
+
+		let roomManager
+		console.log("getOrCreateRoomManager")
 		if(this._RoomManagers.size == 0 || !this._RoomManagers.has(roomName)){
 			// RoomManagerを作成
 
 			const workers = this._workers;
+			console.log(`workers.length: ${workers.length}`)
 
 			roomManager = await RoomManager.create({roomName, workers})
 
+			console.log("getOrCreateRoomManager set")
 			// RoomManagerのMapに追加
 			this._RoomManagers.set(roomName,roomManager)
 		}else{
+			console.log("getOrCreateRoomManager else")
 			roomManager = this._RoomManagers.get(roomName)
 		}
 		return roomManager
 	}
 
+	async run(){
+		await this.runWebSocketServer();
+	}
+
 }
+
+module.exports = SFUManager;
