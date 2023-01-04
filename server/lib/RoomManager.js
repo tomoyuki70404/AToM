@@ -106,27 +106,130 @@ class RoomManager{
 		// Client側の修正が必要になるので、一旦1transportを返すのみにしておく
 		socket.on('createWebRtcTransport', async({ consumer, remoteProducerId }, callback )=> {
 
-			// consumer == trueのときはChildRoomからtransportを取得
+			// socketから重複した呼び出しがあれば１つのtransportを渡せばsend,recv１つずつで済む
+			// consumer == trueのときはChildRoomからtransportを作成or取得
 			if(consumer == true){
 
-				// socketから重複した呼び出しがあれば１つのtransportを渡せばsend,recv１つずつで済む
-				// remoteProducerIdが入っている子Roomからのtransportを渡す
+				// getProducerによってproducerIdが渡されたとき
+				// そのproducerがいるルームからのtransportを検索する
+				// transport（isConsume==true)があればそれを返し、無ければ作成
 
-				// 最適なroomsからtransportを持ってくる処理を書く=================
-				// this._roomCells.forEach( roomCell => {
-					// 	if(roomCell.getTransports(socket)
-					// });
 
-				// ==============================================
-				this._roomCells.forEach( (roomCell,index) => {
-					// RoomCell[0](=親Room)以外のRoomCellからtransportを探す
-					if( index != 0 ){
+				// getProducerをもとにtransportを渡す
+				if(remoteProducerId != null){
+
+					let roomCellTransportData = null;
+
+					// 各RoomCellからremoteProducerIdがあるRoomCellを見つける
+					// RoomCellのtransportsからtransportを取得
+					// 無ければtransport作成
+					this._roomCells.forEach( (roomCell, index) => {
 						roomCell.getPeers().forEach( peer => {
+							if(index != 0 && peer.producers.has(remoteProducerId)){
+								// 探しているproducerが入っているRoomCellのtransportsを返す
+								roomCellTransportData = { roomCell: roomCell, transports:peer.transports }
+							}
+						});
+					});
+
+					// transportsが入っていたら
+					// remoteProducerIdが入っているRoomCellにtransportがあるとき
+					if(roomCellTransportData != null){
+						roomCellTransportData.transports.forEach( ( transportData , index) => {
+
+							// consume用のtransportがあったとき
+							if(transportData.isConsume == true){
+
+								callbackTransport = transportData.transport
+								callback({
+									transportParamfromServer:{
+										id: transport.id,
+										iceParameters: transport.iceParameters,
+										iceCandidates: transport.iceCandidates,
+										dtlsParameters: transport.dtlsParameters,
+									})
+								}
+							});
+						}else{
+							// transportが無い
+							// producerがいるRoomCellからtransportをつくる
+							const roomCell = this._roomCells.at(1)
+							roomCell.createWebRtcTransport().then(
+								transport => {
+									callback({
+										transportParamfromServer:{
+											id: transport.id,
+											iceParameters: transport.iceParameters,
+											iceCandidates: transport.iceCandidates,
+											dtlsParameters: transport.dtlsParameters,
+										}
+									})
+									roomCell.addTransport(socket, transport, consumer)
+								}
+							)
+						}
+					}else{
+						const roomCell = this._roomCells.at(1)
+						roomCell.createWebRtcTransport().then(
+							transport => {
+								callback({
+									transportParamfromServer:{
+										id: transport.id,
+										iceParameters: transport.iceParameters,
+										iceCandidates: transport.iceCandidates,
+										dtlsParameters: transport.dtlsParameters,
+									}
+								})
+								roomCell.addTransport(socket, transport, consumer)
+							}
+						)
+					}
+
+				}else{ //producerがいないRoomCellにtransportを渡す
+					// 全roomCellにproducerもconsumerもいないとき、roomCell[1]にtransportを張る
+					const firstConsumerRoomCell = this._roomCells.at(1)
+
+					firstConsumerRoomCell.createWebRtcTransport().then(
+						transport => {
+							callback({
+								transportParamfromServer:{
+									id: transport.id,
+									iceParameters: transport.iceParameters,
+									iceCandidates: transport.iceCandidates,
+									dtlsParameters: transport.dtlsParameters,
+								}
+							})
+							console.log("createWebRtcTransport childRoom")
+							console.log(`transportId : ${transport.id}`)
+							roomCell.addTransport(socket, transport, consumer)
+						}
+					)
+				}
+
+
+
+				// ================================================================
+
+
+
+
+				// すべてのRoomCell
+				this._roomCells.forEach( (roomCell,index) => {
+
+					// RoomCell[0](=親Room)以外のRoomCellからtransportを探す
+					// remoteProducerIdが指定されている(=getProducerして入ってきている場合)
+					if( index != 0 && remoteProducerId != null){
+
+						roomCell.getPeers().forEach( peer => {
+
 							// producersにremoteProducerIdがあり、transportsにtransportが入っているとき
+							// そのtransportを返す
 							if(peer.producers.has(remoteProducerId) && peer.transports.size > 0){
 
 								peer.transports.forEach( transportData => {
 									if(transportData.isConsume == true){
+
+										hasTransport = true
 										callback({
 											transportParamfromServer:{
 												id: transportData.transport.id,
@@ -142,21 +245,27 @@ class RoomManager{
 					}
 				});
 
-				roomCell.createWebRtcTransport().then(
-					transport => {
-						callback({
-							transportParamfromServer:{
-								id: transport.id,
-								iceParameters: transport.iceParameters,
-								iceCandidates: transport.iceCandidates,
-								dtlsParameters: transport.dtlsParameters,
-							}
-						})
-						console.log("createWebRtcTransport childRoom")
-						console.log(`transportId : ${transport.id}`)
-						roomCell.addTransport(socket, transport, consumer)
-					}
-				)
+				// producerIdを持たずにルーム入室する場合
+				// transportがroomCellに無いとき
+				// 親Roomでない(!=roomCell[0])
+				if( hasTransport == false){
+
+					//各RoomCellに入っているconsumersの数を見て一番少ないところ
+					let allConsumers = new Array()
+					this._roomCells.forEach( (roomCell, index) => {
+						// {roomindex:consumerの数,・・・}のオブジェクトを作成
+						if(index != 0){
+							allConsumers.push( roomCell.getConsumers().length )
+						}
+					});
+
+					const min = allConsumers.indexOf(Math.mix.apply(null,arr))
+
+
+
+
+
+				}
 
 
 
@@ -164,6 +273,10 @@ class RoomManager{
 
 				//consumer == falseのときはProducerのため親Roomからtransportを取得し、return
 				const parentRoom = this._roomCells.at(0)
+
+				// すでにtransportを作っていたらそれを渡さないといけない！
+				// 新しいClientが現れたらtrasnportを作り続けることになる
+
 				parentRoom.createWebRtcTransport().then(
 					transport => {
 						callback({
@@ -251,7 +364,7 @@ class RoomManager{
 						// 子RoomCellからproducersを取得
 						const peers = roomCell.getPeers()
 
-						// １socket.idにおけるproducers
+						// １peer(=1socket)におけるproducers
 						peers.forEach( ( peer, key) =>{
 							if(key !== socket.id && peer.producers.size >0){
 								console.log(`roomCell.getRouterId:${roomCell.getRouter().id}`)

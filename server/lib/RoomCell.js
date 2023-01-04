@@ -18,11 +18,11 @@ class RoomCell{
 		//   - {String} displayName
 		//   - {RTCRtpCapabilities} rtpCapabilities
 		//   - {Map<String, mediasoup.Transport>} transports
-		//       - {String}:transport.id
-		//    	     - {socket}:socket,
-		//	 	     - {transport}:transport,
-		//		     - {bool}:isConsume,
-		//		     - router:<router>
+		//       	- {String}:transport.id
+		//    	   		- {socket}:socket,
+		//	 	     		- {transport}:transport,
+		//		     		- {bool}:isConsume,
+		//		     		- router:<router>
 		//   - {Map<String, mediasoup.Producer>} producers
 		//       - {String}:producer.id
 		//    	     - {socket}:socket,
@@ -66,7 +66,8 @@ class RoomCell{
 				const webRtcTransport_options = {
 					listenIps: [
 						{
-							ip: '192.168.10.113', // replace with relevant IP address
+							// ip: '192.168.10.113', // replace with relevant IP address
+							ip: '192.168.35.35', // smc PC
 							// announcedIp: '10.0.0.115',
 						}
 					],
@@ -162,10 +163,21 @@ class RoomCell{
 	getPeers(){
 		return this._peers
 	}
-	
+
 	getTransports(socket){
 		const peer = this._peers.get(socket.id)
 		return peer.transports
+	}
+
+	// RoomCellに含まれるconsumerすべて抽出してリスト化
+	getConsumers(){
+		let consumersList = new Array();
+		this._peers.forEach( peer => {
+			peer.consumers.forEach( consumer => {
+				consumersList.push(consumer)
+			});
+		});
+		return consumersList
 	}
 
 	// 引数のsocket以外のsocketに紐づくconsumersに通知する
