@@ -19,7 +19,7 @@ class RoomCell{
 		//   - {RTCRtpCapabilities} rtpCapabilities
 		//   - {Map<String, mediasoup.Transport>} transports
 		//       	- {String}:transport.id
-		//    	   		- {socket}:socket,
+		//    	   			- {socket}:socket,
 		//	 	     		- {transport}:transport,
 		//		     		- {bool}:isConsume,
 		//		     		- router:<router>
@@ -66,8 +66,8 @@ class RoomCell{
 				const webRtcTransport_options = {
 					listenIps: [
 						{
-							// ip: '192.168.10.113', // replace with relevant IP address
-							ip: '192.168.35.35', // smc PC
+							ip: '192.168.10.113', // replace with relevant IP address
+							// ip: '192.168.35.35', // smc PC
 							// announcedIp: '10.0.0.115',
 						}
 					],
