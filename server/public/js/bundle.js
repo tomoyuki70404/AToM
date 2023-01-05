@@ -18058,7 +18058,7 @@ async function addDisplayMediaSource(){
 
     liElement.srcObject = stream
     liElement.prepend(deleteButton)
-	liElement.prepend(textLabelinput)
+	  liElement.prepend(textLabelinput)
     selectMediaForm.prepend(liElement)
 
     checkMedias();
@@ -18080,7 +18080,7 @@ function checkMedias(){
 
 //受信＋送信、送信を選択したときにデバイスの選択へ遷移させる
 async function switchSendFunction(mode){
-	console.log("switchSendFunction")
+
     //呼び出し先を分岐
     //mode:sendOnlyのとき
     if(this.mode == "sendOnly"){
@@ -18105,9 +18105,10 @@ async function switchSendFunction(mode){
 		sendMediaConfig = JSON.parse(response.responseText)
 
 		var deviceList_i = 0
-
+    console.log(sendMediaConfig)
 		//jsonで設定したデバイス分だけ送信するメディアを追加し、jsonのキーに一致するデバイス・素材名をセットする
 		for await (item of sendMediaConfig) {
+      console.log(item)
 		    // 関数の実行結果を格納して表示
 		    const result = await addMediaSource();
 			const mediaListElements =  document.querySelectorAll(".mediaListCls");
@@ -18115,15 +18116,18 @@ async function switchSendFunction(mode){
 
       //PCに接続されているデバイス数分、jsonのデバイス名と一致するか比較
 			for(var temp_i = deviceList_i ; temp_i<mediaListElements[0].querySelector('.userMediaOption').length; temp_i++){
-				console.log(temp_i)
 				var setDeviceStr = Object.keys(item).toString()
 				var optionDeviceStr = mediaListElements[0].querySelector('.userMediaOption').options[temp_i].innerHTML
+        // var reg = new RegExp(setDeviceStr)
+        console.log("setDeviceStr:"+setDeviceStr+"  optionDeviceStr:"+optionDeviceStr +"  T/F:"+setDeviceStr.startsWith(optionDeviceStr))
 
-				if(optionDeviceStr == setDeviceStr){
+				if(optionDeviceStr == setDeviceStr || setDeviceStr.startsWith(optionDeviceStr)){
 					mediaListElements[0].querySelector('.userMediaOption').options[temp_i].selected=true
 					mediaSourceElements[0].setAttribute('value',Object.values(item).toString())
-          			deviceList_i = temp_i
-					break
+          deviceList_i = temp_i
+          console.log(temp_i)
+
+          break
 				}
 			}
 			// console.log(mediaListElements[0].querySelector('.userMediaOption').options[1].innerHTML)
@@ -18164,6 +18168,13 @@ function chgButtonsToEnterRoom(){
 	// document.getElementsByClassName('selectMedias')[0].style.display = "none"
 	document.getElementById('selectMedias').setAttribute('style','display:none')
 	document.getElementById('enterRoomBtn').setAttribute('style','display:none')
+  const departmentLevel = document.getElementsByClassName('selectDepartment')[0].selectedOptions[0].dataset.departlevel
+
+  if(departmentLevel == 1 || departmentLevel == 0){
+    document.getElementById('fileShareButton').setAttribute('style','')
+  }
+
+
 
 	const mediaSourceLists = document.getElementsByClassName('mediaListCls')
 	const mediaSourceText = document.getElementsByClassName('mediaSourceTextInfo')
@@ -18269,9 +18280,22 @@ async function sendMediaSet (){
         createSendTransport(sendParamArray)
 
 		if(isSendOnly != true){
-	        await getProducers()
+	    await getProducers()
 			document.getElementById("remoteVideoSize").setAttribute('style','');
-	      	// if(document.body.clientWidth <= 800) positionButton.setAttribute('style','');
+			document.getElementById("remoteVideos").setAttribute('style','');
+			document.getElementById("audioAlea").setAttribute('style','');
+
+      const departmentLevel = document.getElementsByClassName('selectDepartment')[0].selectedOptions[0].dataset.departlevel
+      console.log(`departlevel: ${departmentLevel}`)
+
+      // ファイル共有はTDかSMCの人間のみにする
+      if(departmentLevel == 1 || departmentLevel == 0){
+        document.getElementById('fileShareButton').setAttribute('style','')
+      }
+      document.getElementById('shareFiles').setAttribute('style','')
+      getFileNames()
+
+	    // if(document.body.clientWidth <= 800) positionButton.setAttribute('style','');
 		}
     }catch (error){
       console.log("transFunc_error")
@@ -18341,8 +18365,7 @@ function createSendTransport (sendParamArray){
         await socket.emit('transport-produce', {
           kind: parameters.kind,
           rtpParameters: parameters.rtpParameters,
-		  // 使用しているtransportのID
-		  transportId:transportParamfromServer.id,
+          transportId:transportParamfromServer.id,
           appData: parameters.appData,
         }, ({ id, producersExist ,appData}) => {
           console.log("appData")
@@ -18361,23 +18384,314 @@ function createSendTransport (sendParamArray){
 
 const recvFunc = async () =>{
 	document.getElementById('initialButtons').setAttribute('style','display:none')
-	// document.getElementById("remoteVideoSize").setAttribute('style','none');
-	//
-    document.getElementById("remoteVideoSize").setAttribute('style','');
 
-    await getProducers()
+  document.getElementById("remoteVideoSize").setAttribute('style','');
+  document.getElementById("remoteVideos").setAttribute('style','');
+  document.getElementById("audioAlea").setAttribute('style','');
+
+  const departmentLevel = document.getElementsByClassName('selectDepartment')[0].selectedOptions[0].dataset.departlevel
+  console.log(`departlevel: ${departmentLevel}`)
+  if(departmentLevel == 1){
+    document.getElementById('fileShareButton').setAttribute('style','')
+  }
+  document.getElementById('shareFiles').setAttribute('style','')
+
+  getFileNames()
+
+  await getProducers()
 }
 
 receiveOnlyBtn.addEventListener('click',recvFunc)
 
-// const fileShareFun ()=>{
-//   const modal = document.getElementById('modal-content');
-//   modal.style.display = ""
-// }
+
+let fileNamesArray = new Array();
+
+const fileShareFunc = async ()=>{
+
+  await socket.emit('getFileNames', repObj =>{
+
+    const modal = document.getElementById('modal');
+    const mask = document.getElementById('mask');
+    const closebtn = document.getElementById('modalClose');
+    const sharingFiles = document.querySelectorAll('a[class=shareFileCls]')
+    sharingFiles.forEach( item => {
+      if(fileNamesArray.includes(item.getAttribute('value')) == false){
+        fileNamesArray.push(item.getAttribute('value'))
+      }
+    });
+
+    // const sharingFilesName = sharingFiles.filter( item => item.getAttribute('value') == fileName )
+    console.log("fileNamesArray")
+    console.log(fileNamesArray)
+    repObj.fileNames.forEach( file => {
+      // if(sharingFilesName.includes(file) == false){
+      if(fileNamesArray.includes(file) == false){
+        console.log(`param file: ${file}`)
+
+        const liElem = document.createElement('li')
+        const deleteButton = document.createElement('input')
+        deleteButton.setAttribute('type','button')
+        deleteButton.addEventListener('click', async function(event){
+          const deleteIndex = fileNamesArray.indexOf(file)
+          fileNamesArray.splice(deleteIndex,1)
+          let parent = event.target.parentNode;
+          parent.remove()
+          await socket.emit('deleteFile',{ fileName:file } )
+          console.log("delete")
+
+        })
+        deleteButton.setAttribute('value','削除')
+
+        const fileRef = document.createElement('a')
+        const path = "./shareFolder/"
+        fileRef.setAttribute('class',`shareFileCls`)
+        fileRef.setAttribute('href',`${path}${file}`)
+        fileRef.setAttribute('target','_blank')
+        fileRef.setAttribute('value',`${file}`)
+        fileRef.innerHTML = `${file}`
+
+        liElem.appendChild(fileRef)
+        liElem.appendChild(deleteButton)
+
+        droppedFiles.appendChild(liElem)
+      }
+    })
 
 
 
-// fileShareBtn.addEventListener('click',fileShareFunc)
+    modal.style.display="";
+    mask.style.display="";
+
+    closebtn.addEventListener('click',()=>{
+      modal.style.display="none";
+      mask.style.display="none";
+    });
+
+  });
+
+
+}
+
+
+socket.on('fileInfo', ({ fileName, status }) => {
+  console.log(`recv fileInfo ${fileName}`)
+
+  const files = document.querySelectorAll("iframe[class=shareFilesCls]")
+  files.forEach( item => {
+    if(fileNamesArray.includes(item.getAttribute('value')) == false){
+      fileNamesArray.push(item.getAttribute('value'))
+    }
+  });
+
+  console.log(fileNamesArray)
+  if(status == "newFile"){
+    if(fileNamesArray.includes(fileName) == false){
+
+
+      const newFile = document.createElement('iframe')
+      newFile.setAttribute('class',`shareFilesCls`)
+      newFile.setAttribute('src',`./shareFolder/${fileName}`)
+      newFile.setAttribute('value',`${fileName}`)
+
+      shareFiles.appendChild(newFile)
+
+      let s = document.styleSheets[0]
+      console.log(s)
+      if(files.length == 0){
+        console.log("width:100")
+        s.cssRules.item(41).style.setProperty('width','100%');
+      }else{
+        s.cssRules.item(41).style.setProperty('width','48%');
+      }
+
+    }
+
+  }else if(status == "delete"){
+
+    console.log(`recv delete file ${fileName}`)
+    const deleteIndex = fileNamesArray.indexOf(fileName)
+    fileNamesArray.splice(deleteIndex,1)
+
+    let files = document.querySelectorAll("iframe[class=shareFilesCls]")
+    console.log(files)
+    files.forEach( item => {
+      console.log(item.getAttribute('value'))
+      if(item.getAttribute('value') == fileName){
+        item.remove()
+      }
+    });
+
+    files = document.querySelectorAll("iframe[class=shareFilesCls]")
+    let s = document.styleSheets[0]
+    if(files.length == 1){
+      console.log("width:100")
+      s.cssRules.item(41).style.setProperty('width','100%');
+    }else{
+      s.cssRules.item(41).style.setProperty('width','48%');
+    }
+
+  }
+
+})
+
+// サーバから共有中のファイルを取得する
+const getFileNames =()=>{
+  console.log(`getFileNames`)
+  socket.emit('getFileNames', fileNames =>{
+    console.log(`getFileNames ${fileNames}`)
+    const path = "./shareFolder/"
+
+    console.log(fileNames)
+
+
+    for(file of fileNames.fileNames){
+
+      const newFile = document.createElement('iframe')
+      newFile.setAttribute('class',`shareFilesCls`)
+      newFile.setAttribute('src',`./shareFolder/${file}`)
+      newFile.setAttribute('value',`${file}`)
+      shareFiles.appendChild(newFile)
+    }
+
+    const existFiles = document.querySelectorAll("iframe[class=shareFilesCls]")
+    console.log(`existFiles ${existFiles}`)
+    console.log(existFiles.length)
+    let s = document.styleSheets[0]
+    console.log(s)
+    if(existFiles.length == 1){
+      console.log("width:100")
+      s.cssRules.item(41).style.setProperty('width','100%');
+    }else{
+      s.cssRules.item(41).style.setProperty('width','48%');
+    }
+
+
+  })
+}
+
+
+dropTarget.addEventListener('dragover',(event)=>{
+  event.preventDefault()
+  event.dataTransfer.dropEffect='copy'
+})
+
+const ddarea = document.getElementById("dropTarget");
+// ドラッグされたデータが有効かどうかチェック
+const isValid = e => e.dataTransfer.types.indexOf("Files") >= 0;
+
+
+// ファイル共有を実行する
+const emitFileName =()=>{
+  console.log("send file name")
+
+  const fileNames = document.querySelectorAll('a[class=shareFileCls]')
+  console.log(fileNames)
+
+  fileNames.forEach( item => {
+    // console.log(item.innerHTML)
+    socket.emit('newFile', { fileName : item.innerHTML })
+  });
+}
+
+fileShareRun.addEventListener('click',emitFileName)
+
+// ファイルをドロップしたときの処理
+const ddEvent = {
+  "dragover" : e=>{
+    e.preventDefault(); // 既定の処理をさせない
+    if( !e.currentTarget.isEqualNode( ddarea ) ) {
+      // ドロップエリア外ならドロップを無効にする
+      e.dataTransfer.dropEffect = "none";return;
+    }
+    e.stopPropagation(); // イベント伝播を止める
+
+    if( !isValid(e) ){
+      // 無効なデータがドラッグされたらドロップを無効にする
+      e.dataTransfer.dropEffect = "none";return;
+    }
+    // ドロップのタイプを変更
+    e.dataTransfer.dropEffect = "copy";
+    ddarea.classList.add("ddefect");
+  },
+  "dragleave" : e=>{
+    if( !e.currentTarget.isEqualNode( ddarea ) ) {
+      return;
+    }
+    e.stopPropagation(); // イベント伝播を止める
+    ddarea.classList.remove("ddefect");
+  },
+  "drop":e=>{
+    e.preventDefault(); // 既定の処理をさせない
+    e.stopPropagation(); // イベント伝播を止める
+
+    const files = e.dataTransfer.files;
+    // const path = "//192.168.23.217/fax受信ファイル/受信ファイル/"
+    const path = "./shareFolder/"
+
+    // ドロップされたファイルの重複削除
+    const sharingFiles = document.querySelectorAll('a[class=shareFileCls]')
+    sharingFiles.forEach( item => {
+      if(fileNamesArray.includes(item.getAttribute('value')) == false){
+        fileNamesArray.push(item.getAttribute('value'))
+      }
+    });
+
+    for(file of files){
+      console.log(file)
+      console.log(fileNamesArray)
+      if(fileNamesArray.includes(file.name) == false){
+
+        // hrefの場合
+
+        const liElem = document.createElement('li')
+        const deleteButton = document.createElement('input')
+        deleteButton.setAttribute('type','button')
+        deleteButton.addEventListener('click',async function(event){
+          const deleteIndex = fileNamesArray.indexOf(event.path[1].firstChild.innerHTML)
+          fileNamesArray.splice(deleteIndex,1)
+          let parent = event.target.parentNode;
+          parent.remove()
+          console.log(event)
+          console.log(event.path[1].firstChild.innerHTML)
+          await socket.emit('deleteFile',{ fileName: event.path[1].firstChild.innerHTML } )
+          console.log("delete")
+        })
+        deleteButton.setAttribute('value','削除')
+
+
+        const fileRef = document.createElement('a')
+        fileRef.setAttribute('class',`shareFileCls`)
+        fileRef.setAttribute('href',`${path}${file.name}`)
+        fileRef.setAttribute('target','_blank')
+        fileRef.setAttribute('value',`${file.name}`)
+        fileRef.innerHTML = `${file.name}`
+
+        // newFileRef.appendChild(fileRef)
+        // newFileRef.href =path + file.name
+
+        // fileRef.addEventListener('click',()=>{
+          //   socket.emit('newFile', { fileName : file.name })
+          // })
+
+          liElem.appendChild(fileRef)
+          liElem.appendChild(deleteButton)
+
+          droppedFiles.appendChild(liElem)
+      }
+
+    }
+
+    ddarea.classList.remove("ddefect");
+  }
+}
+
+Object.keys( ddEvent ).forEach( e=>{
+  ddarea.addEventListener(e,ddEvent[e]);
+  document.body.addEventListener(e,ddEvent[e])
+});
+
+
+fileShareBtn.addEventListener('click',fileShareFunc)
 
 var streamOnOffSwitch = (obj) =>{
     // var selectElements = $(`#selectMedia select option:selected`)
@@ -18573,7 +18887,6 @@ socket.on('captionControl',({consumerId, isCaption})=>{
 })
 
 const getProducers = async () => {
-  console.log("getProducers after")
   await socket.emit('getProducers', producerParams => {
 
     console.log("producerParams")
@@ -18582,7 +18895,6 @@ const getProducers = async () => {
 	//producerが１つでもあるとき
 	if(producerParams.length != 0){
 		producerParams.forEach(params=>{
-      console.log(`producer > 0`)
 			signalNewConsumerTransport(params.producerId, params.producerLabel,params.accessLevel)
 		})
 	}else{

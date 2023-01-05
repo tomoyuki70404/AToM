@@ -9,7 +9,8 @@ class RoomManager{
 	constructor({
 		roomName,
 		roomCells,
-		workers
+		workers,
+		audioLevelObserver,
 	}){
 		// ルーム名
 		this._roomName = roomName
@@ -26,6 +27,12 @@ class RoomManager{
 		//	-	{bool} isConsume
 		// 	-	{transport} transport
 		this._pipeList = new Map();
+
+		this._audioLevelObserver = audioLevelObserver;
+
+		this._audioConsumersSockets = new Map();
+
+		this._shareFiles = new Array();
 	}
 
 	// RoomManagerを作り、mainのRoomを１つ入れておく
@@ -67,11 +74,20 @@ class RoomManager{
 			console.log(`roomCell Count :${roomCells.length}`)
 		};
 
+		// 親RoomのRouterを使ってaudioLevelObserverを動かす
+		// 親RoomCellはすべてのaudioProducerが入っている
+		const audioLevelObserver = await roomCells[0].getRouter().createAudioLevelObserver({
+			maxEntries:100,
+			threshold:-127,
+			interval:250
+		})
+
 		return new RoomManager(
 			{
 				roomName	:roomName,
 				roomCells 	:roomCells,
-				workers 	:workers
+				workers 	:workers,
+				audioLevelObserver : audioLevelObserver
 			}
 		)
 	}
@@ -83,7 +99,7 @@ class RoomManager{
 	createTransport(socket, roomCellIndex , isConsume ,  callback){
 		// transportが無い
 		// producerがいるRoomCellからtransportをつくる
-		const roomCell = this._roomCells.at(roomCellIndex)
+		const roomCell = this._roomCells[roomCellIndex]
 		roomCell.createWebRtcTransport().then(
 			transport => {
 				callback({
@@ -99,6 +115,43 @@ class RoomManager{
 		)
 	}
 
+	addAudioProducer(socket, producerId){
+		console.log("producerId")
+		console.log(producerId)
+
+		this._audioLevelObserver.addProducer({
+			producerId : producerId
+		}).catch(() => {})
+
+
+		console.log("add audioProducer")
+		let producerInfo, volumeInfo;
+		let audioConsumers = new Array();
+
+		this._audioLevelObserver.on('volumes', (volumes) =>{
+
+			// volumesに全producerのvolume情報が入っているので個別で1producerずつ処理する
+			volumes.forEach( volumePerProducer => {
+				producerInfo = volumePerProducer.producer;
+				volumeInfo = ((volumePerProducer.volume+127)/127).toFixed(2);
+				//ノイズが入っている場合も枠が出てしまうので一部をカット
+				// if(volumeInfo < 0.3) {
+				// 	volumeInfo = 0.00
+				// }
+
+				//audioConsumersはsocket.idをキーとする（重複してない）
+				this._audioConsumersSockets.forEach( (audioConsumerSocket, index) => {
+					// console.log(`producerId : ${audioConsumerSocket.producerId} volumeInfo: ${volumeInfo}`)
+					audioConsumerSocket.socket.emit('volumeInfo',{
+						producerVolumeId: volumePerProducer.producer.id,
+						volume: volumeInfo
+					})
+				});
+
+			});
+		})
+	}
+
 	informConsumers(socketId, producerId, producerLabel, accessLevel){
 		let allConsumers = new Array();
 		let informedConsumers = new Map();
@@ -112,7 +165,7 @@ class RoomManager{
 			// consumerがいるsocketに重複が無ければinformするconsumersとして配列に入れる
 			// 重複するとなんどもsocketを呼び出すことになるため
 			if(!informedConsumers.has(consumer.socket.id) && socketId != consumer.socket.id){
-				consumer.socket.emit('new-producer',{
+				consumer.socket.emit('new-producer', {
 					producerId: producerId,
 					producerLabel: producerLabel,
 					accessLevel: accessLevel
@@ -121,6 +174,40 @@ class RoomManager{
 			}
 		});
 	}
+
+	// param1:ファイルを共有してきたsocketのId(基本TDにあたるソケット)
+	// informFileDataConsumers(socketId, addFile, status) =>{
+	// 	let consumerSocketIdList = []
+	//
+	// 	if(consumers.length == 0 && producers.length > 0){
+	// 		console.log(`consumers = 0 && producers > 0`)
+	// 		for(let key in peers){
+	// 				if(key != peers){
+	// 					const oneConsumerSocket = peers[key].socket
+	// 					oneConsumerSocket.emit('fileInfo',{
+	// 						fileName:addFile,
+	// 						status:status
+	// 					})
+	// 				}
+	// 		}
+	// 	}else{
+	//
+	// 		consumers.forEach( consumerData => {
+	// 			if(consumerSocketIdList.includes(consumerData.socketId) == false){
+	// 				const consumerSocket = peers[consumerData.socketId].socket
+	// 				consumerSocket.emit('fileInfo',{
+	// 					fileName:addFile,
+	// 					status:status
+	// 				})
+	// 				consumerSocketIdList.push(consumerData.socketId)
+	// 			}else{
+	// 				logger.error("add consumer socketId pass")
+	// 			}
+	//
+	// 		})
+	// 	}
+	//
+	// }
 
 	handleConnection(socket){
 		socket.emit('connection-success', {
@@ -136,16 +223,20 @@ class RoomManager{
 			});
 
 			//rtpCapabilitiesを一旦roomCell[0](=親RoomCell)で作ってみる
-			const childroom = this._roomCells.at(0)
+			console.log( "this._roomCells" )
+			console.log( this._roomCells )
+			const childroom = this._roomCells[0]
 			// 親RoomCellのrtpCapabilitiesを渡しておく
 			const rtpCapabilities = childroom.getRouter().rtpCapabilities
 
 			callback({ rtpCapabilities })
 		})
 
+
 		// consumerはisConsumerに変更したほうがいい（メモ）
 		// callbackで複数のtransportを返せるように変更する必要あり
 		// Client側の修正が必要になるので、一旦1transportを返すのみにしておく
+
 		socket.on('createWebRtcTransport', async({ consumer, remoteProducerId }, callback )=> {
 
 			const isConsume = consumer
@@ -210,7 +301,8 @@ class RoomManager{
 			}else{
 
 				//consumer == falseのときはProducerのため親Roomからtransportを取得し、return
-				const parentRoom = this._roomCells.at(0)
+
+				const parentRoom = this._roomCells[0]
 
 				// ParentRoomで呼んでくるsocketに紐づくtransportがあるかを確認
 				let producerTransport = null
@@ -223,7 +315,7 @@ class RoomManager{
 				//transportがあれば、それをcallbackで返す
 				if(producerTransport != null){
 					callback({
-						transportParamfromServer:{
+						transportParamfromServer : {
 							id: producerTransport.id,
 							iceParameters: producerTransport.iceParameters,
 							iceCandidates: producerTransport.iceCandidates,
@@ -267,7 +359,7 @@ class RoomManager{
 			const producerLabel = appData[0].producerLabel
 			const accessLevel = appData[0].accessLevel
 
-			const parentRoom = this._roomCells.at(0)
+			const parentRoom = this._roomCells[0]
 
 
 			// 一旦this._roomCells[1]を子Roomとしてそこからconsumeできるかテスト
@@ -284,7 +376,7 @@ class RoomManager{
 			// （childRoomCellIndex[0]は親RoomCellをさすことになるため）
 			const childRoomIndex = consumersCountArray.indexOf(Math.min(...consumersCountArray)) + 1
 			// pipeするRoomCellを取得する
-			const childRoom = this._roomCells.at(childRoomIndex)
+			const childRoom = this._roomCells[childRoomIndex]
 
 			const producer = await parentRoom.getTransports(socket).get(transportId).transport.produce({
 				kind,
@@ -294,6 +386,7 @@ class RoomManager{
 			console.log(`transport-produce ParentRoomRouter.id: ${parentRoom.getRouter().id}`)
 			// 親Roomにproducerを追加
 			parentRoom.addProducer(socket, producer, producerLabel, accessLevel)
+
 
 			// 親Roomから子RoomにpipeToRouter
 			await parentRoom.getRouter().pipeToRouter({
@@ -305,12 +398,18 @@ class RoomManager{
 			childRoom.addProducer(socket, producer, producerLabel, accessLevel)
 			console.log(`transport-produce childRoomRouter.id: ${childRoom.getRouter().id}`)
 
+			if(kind == "audio"){
+				this.addAudioProducer(socket, producer.id)
+			}
+
+
 			// childRoom.informConsumers(socket.id, producer.id, producerLabel, accessLevel)
 			this.informConsumers(socket.id, producer.id, producerLabel, accessLevel)
 
 			producer.on('transportclose', () => {
 				console.log(`transport close ${producer}`)
 				// audioLevelObserver.RemoveProducer(producer);
+				this._audioLevelObserver.RemoveProducer(producer);
 				producer.close()
 			})
 
@@ -403,22 +502,34 @@ class RoomManager{
 
 								consumer.on('transportclose', ()=>{
 									console.log('transport close from consumer')
+
+									this._audioConsumersSockets.delete(consumer.id)
+
+									roomCell._peers.delete(socket.id)
 								})
 
 								consumer.on('producerclose', () =>{
+									console.log(`producer- closed : ${remoteProducerId}`)
 									socket.emit('producer-closed', { remoteProducerId })
 
 									consumerTransport.close([])
 
-									// 子Roomのpeers>transportsからsocket.idのtransportを削除する
 									roomCell.getPeers().get(socket.id).transports.delete(socket.id)
+
+									roomCell.getPeers().get(socket.id).consumers.delete(socket.id)
+									// 子Roomのpeers>transportsからsocket.idのtransportを削除する
 
 									consumer.close()
 
-									roomCell.getPeers().get(socket.id).consumers.delete(socket.id)
 								})
 
 								roomCell.addConsumer(socket, consumer)
+								// 重複したsokcetが無いときにそのsocketを追加
+								//
+								if( consumer.kind == "audio" ){
+									console.log("add audioConsumer")
+									this._audioConsumersSockets.set(consumer.id, { socket:socket , producerId:remoteProducerId })
+								}
 
 								const consumerParams = {
 									id:consumer.id,
@@ -470,17 +581,26 @@ class RoomManager{
 		})
 
 		socket.on('disconnect', () => {
-			this._roomCells.forEach((roomCell, i) => {
-				if(i != 0){
+			this._roomCells.forEach( roomCell => {
 					//peers内のsocketデータを削除
 					roomCell._peers.delete(socket.id)
 					console.log(`roomCell===========================================`)
 					console.log(roomCell.getRouter().id)
 					console.log(roomCell)
 					console.log('disconnect End', socket.id)
-				}
 			})
 		})
+
+		socket.on('newFile', ({fileName})=>{
+			console.log("newFile recv")
+			const status = "newFile"
+			if(shareFiles.includes(fileName) == false){
+				console.log("add file")
+				shareFiles.push(fileName)
+			}
+			informFileDataConsumers(socket.id, fileName, status)
+		})
+
 	}
 
 }

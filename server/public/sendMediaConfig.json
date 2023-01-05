@@ -1,10 +1,10 @@
 [
-	{"マイク (Live Gamer Mini) (07ca:1311)":"SV1 札幌"},
+	{"マイク (AVMATRIX USB Capture Audio) (04b4:4231)":"SV1 札幌"},
 	{"ライン入力 (Realtek(R) Audio)":"アラ監・ネット電話・速報"},
-	{"Live Gamer Mini (07ca:1311)":"STV"},
+	{"AVMATRIX USB Capture Video (04b4:4231)":"STV"},
 	{"USB Video (534d:2109)":"モニタ棚１"},
 	{"USB Video (534d:2109)":"STV APS"},
-	{"USB Video (534d:2109)":"N1"},
 	{"USB Video (534d:2109)":"モニタ棚２"},
+	{"USB Video (534d:2109)":"N1"},
 	{"GV-USB3_HD, Analog Capture (04bb:0543)":"NTV APS"}
 ]

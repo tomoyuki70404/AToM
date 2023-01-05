@@ -1,0 +1,134 @@
+body{
+	background-color: #000;
+	width: 97vw;
+	padding: 0;
+	margin: 0;
+}
+p{
+	color: #fff;
+	margin: 0;
+	padding: 0;
+	text-align: center;
+}
+
+video{
+	border: 5px solid #fff;
+    margin: 3px 3px;
+}
+
+.mainTable{
+	width:100%
+}
+
+#userInfo,#selectMedias{
+	height: 50px;
+	margin: 10px;
+	display: flex;
+	justify-content: center;
+}
+
+#userInfo input,select{
+	width: 95%;
+	margin: 5px;
+}
+
+
+.department, .name{
+	width: 50%;
+	height: : 80%;
+	margin:5px 5px;
+	display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#functions {
+	justify-content: center;
+	display: flex;
+}
+
+#functions *{
+	margin:10px 10px;
+}
+
+
+#selectMedias input{
+	margin: 10px;
+}
+
+#selectMediaForm {
+	text-align:  center;
+	margin: auto;
+}
+#selectMediaForm select,#selectMediaForm input[type="text"]{
+	width: 40%;
+	margin: 5px 10px;
+	vertical-align: middle;
+}
+#selectMediaForm input[type="image"]{
+	vertical-align: middle;
+}
+
+#selectMediaForm li{
+	align-items: center;
+	margin: auto;
+	width: 60%;
+	height: 50px;
+}
+
+.muteButton , .camOffOnButton,.soundOnOffBtn{
+	width:30px;
+	height: 30px;
+}
+
+#mainAlea{
+	width: 100%;
+	display:flex;
+	flex-flow: column;
+	justify-content:space-between;
+}
+#localVideos{
+	vertical-align: top;
+}
+
+#localVideos video{
+	width:30vw;
+}
+#remoteVideoSize{
+	width: 2%;
+	vertical-align: top;
+}
+#remoteVideos{
+	width: 100%;
+	vertical-align: top;
+}
+#remoteVideos li{
+	width: 45%;
+}
+#remoteVideos video, #remoteVideos p{
+	align-items: center;
+	text-align: center;
+}
+
+#remoteVideoContainer{
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: left;
+}
+
+#audioAlea{
+	width: 96vw;
+}
+#audioAlea ul{
+	width: 96vw;
+	flex-direction: row;
+}
+#audioAlea li{
+	margin: 0;
+	padding: 0;
+	min-width: 45vw;
+
+}

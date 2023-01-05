@@ -76,19 +76,39 @@
 				<button type="button" id="enterRoomBtn" style="display:none">ルーム入室</button>
 			</div>
 		</div>
+		<div id="shareFilesAlea">
+			<ul id ="files"></ul>
+		</div>
 	</div>
 
-	<!-- ファイル共有用のモーダルウィンドウ -->
-	<div id="modal-content"　style="display:none">
-		<p>「閉じる」か「背景」をクリックするとモーダルウィンドウを終了します。</p>
-		<p><a id="modal-close" class="button-link">閉じる</a></p>
-	</div>
+
 
 
 	<div id="mainAlea">
+
+		<div id="modal" class="modal" style="display:none">
+			<div id="dropTarget">
+				<p>
+					ここに共有したいファイルをドロップしてください
+				</p>
+				<p>
+					※\\192.168.23.217\fax受信ファイル	からのPDFファイルのみ可能です
+				</p>
+			</div>
+		  <ul id="droppedFiles">
+				<p>【共有中のファイル】</p>
+
+			</ul>
+			<input id="fileShareRun" type="button" value="ファイルを共有する"/>
+			<input id="modalClose" type="button" value="閉じる"/>
+		</div>
+		<div id="mask" style="display:none"></div>
+
 		<p id="watermark" style="display:none"></p>
 		<table class="mainTable">
 			<tr id="localVideoTr">
+				<td>
+				</td>
 				<td>
 					<ul id="localVideos"></ul>
 				</td>
@@ -98,14 +118,20 @@
 					<input id="smallSizeBtn" type="button" value="小"></input>
 					<input id="largeSizeBtn" type="button" value="大"></input>
 					<input id="rowBtn" type="button" value="縦"></input>
-					<input id="fileShareBtn" type="button" value="ファイル共有"></input>
 				</td>
-				<td id="remoteVideos">
+				<td id="remoteVideos" style="display:none">
 					<ul id="remoteVideoContainer"></ul>
 				</td>
 			</tr>
+			<tr>
+				<td id="fileShareButton" style="visibility:hidden">
+						<input id="fileShareBtn" type="button" value="共"></input>
+				</td>
+				<td  id="shareFiles" style="display:none">
+				</td>
+			</tr>
 		</table>
-		<div id="audioAlea">
+		<div id="audioAlea" style="display:none">
 			<ul id="audioLists"></ul>
 		</div>
 	</div>

@@ -192,3 +192,71 @@ button#SignIn:hover {
   opacity: 0.3;
   background:none;
 }
+
+#mask {
+  background: rgba(0, 0, 0, 0.4);
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+}
+
+#modal{
+	background: #fff;
+  color: #555;
+  width: 500px;
+  padding: 30px;
+  border-radius: 4px;
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  z-index: 2;
+}
+
+#modal p{
+	color:black;
+}
+
+#modal #dropTarget{
+	width:90%;
+	height:50%;
+	border: dashed black;
+	margin: auto;
+}
+
+#modal a{
+	color: #fff;
+	font-size:80%;
+  background: #5876a3;
+  padding: 5px 30px;
+	margin: 3% 2%;
+  display: inline-block;
+  border-radius: 5px;
+  text-decoration: none;
+}
+
+#droppedFiles li{
+	border: black;
+	border-bottom: 1px solid black;
+	list-style:none;
+	margin: 1px 5px;
+}
+
+#modal input{
+	margin: 3% 5%;
+}
+
+#sharefiles{
+	overflow: hidden;
+}
+
+#shareFiles iframe{
+	width:48%;
+	height:50vh;
+	margin: 3px 3px;
+	float: left;
+}

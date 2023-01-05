@@ -1,0 +1,121 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>Streaming Master Web</title>
+	<link id="NormalStyleSheet" rel="stylesheet" href="./css/normal.css" />
+	<link id="MobileStyleSheet" rel="stylesheet" href="./css/mobile.css"media="screen and (max-width: 800px)">
+	<script
+	src="https://code.jquery.com/jquery-3.4.1.min.js"
+	integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+	crossorigin="anonymous">
+	</script>
+	<script src="https://alcdn.msauth.net/browser/2.26.0/js/msal-browser.js"
+  integrity="sha384-fitpJWrpyl840mvd9nBFLGulqR4BJzvim0fzrXQKdsVh2AQzE4rTTJ0o5o+x+dRK"
+  crossorigin="anonymous"></script>
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+	<div id="mediaSettingAlea">
+		<!-- 認証を実装後に使う -->
+		<!-- <button type="button" id="SignIn" class="signInBtn" onclick="signIn()">Microsoftアカウントでログイン</button>
+		<div id="card-div" style="display:none">
+			<div class="card text-center">
+				<div class="card-body">
+					<h5 class="card-title" id="WelcomeMessage">Please sign-in to see your profile and read your mails</h5>
+					<div id="profile-div"></div>
+					<br>
+					<br>
+					<button class="btn btn-primary" id="seeProfile" onclick="seeProfile()">See Profile</button>
+				</div>
+			</div>
+		</div>
+		<div id="initialButtons" style="display:none"> -->
+
+
+		<div id="initialButtons">
+			<div id="userInfo">
+				<div id="userInfo_depart" class="department">
+					<p>所属部署</p>
+
+					<!-- レベル分け
+					0:放送技術部
+					1:TD
+					2:放送部
+					3:その他（報道・営業・編成など） -->
+					<select id="department" class="selectDepartment">
+						<option value="null"></option>
+						<option value="放送技術部" data-departLevel='0'>放送技術部</option>
+						<option value="営業推進部" data-departLevel='3'>営業推進部</option>
+						<option value="編成部" data-departLevel='3'>編成部</option>
+						<option value="報道部" data-departLevel='3'>報道部</option>
+						<option value="TD" data-departLevel='1'>TD</option>
+						<option value="放送部" data-departLevel='2'>放送部</option>
+						<option value="配信専用" data-departLevel='9'>モニタ配信専用（選択しないでください）</option>
+					</select>
+				</div>
+				<div class="name">
+					<p>氏名</p>
+					<input type="text" id="inputName" placeholder="氏名"></input>
+				</div>
+			</div>
+			<div id="functions">
+				<!-- <input type="button" id="receiveOnlyBtn" value="ルーム入室"></input>
+				<input type="button" id="receiveSendBtn" value="ルーム入室+会話"></input>
+				<input type="button" id="sendOnlyBtn" value="送信のみ"></input> -->
+				<button id="receiveOnlyBtn">ルーム入室</button>
+				<button id="receiveSendBtn" >ルーム入室+会話</button>
+				<!-- <button id="sendOnlyBtn">送信のみ</button> -->
+			</div>
+		</div>
+		<div id="mediaSetAlea" >
+			<div id="selectMedias" style="display:none">
+				<input type="button" id="addMedia" value="マイク/ウェブカメラを追加">
+				<input type="button" id="addDisplayMedia" value="画面共有を追加">
+			</div>
+			<div id="selectMediaForm" >
+				<button type="button" id="enterRoomBtn" style="display:none">ルーム入室</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- ファイル共有用のモーダルウィンドウ -->
+	<div id="modal-content"　style="display:none">
+		<p>「閉じる」か「背景」をクリックするとモーダルウィンドウを終了します。</p>
+		<p><a id="modal-close" class="button-link">閉じる</a></p>
+	</div>
+
+
+	<div id="mainAlea">
+		<p id="watermark" style="display:none"></p>
+		<table class="mainTable">
+			<tr id="localVideoTr">
+				<td>
+					<ul id="localVideos"></ul>
+				</td>
+			</tr>
+			<tr>
+				<td id="remoteVideoSize" style="display:none">
+					<input id="smallSizeBtn" type="button" value="小"></input>
+					<input id="largeSizeBtn" type="button" value="大"></input>
+					<input id="rowBtn" type="button" value="縦"></input>
+					<input id="fileShareBtn" type="button" value="ファイル共有"></input>
+				</td>
+				<td id="remoteVideos">
+					<ul id="remoteVideoContainer"></ul>
+				</td>
+			</tr>
+		</table>
+		<div id="audioAlea">
+			<ul id="audioLists"></ul>
+		</div>
+	</div>
+</body>
+<footer>
+	<script type="text/javascript" src="./js/bundle.js"></script>
+	<script type="text/javascript" src="./js/authConfig.js"></script>
+	<script type="text/javascript" src="./js/graphConfig.js"></script>
+	<script type="text/javascript" src="./js/ui.js"></script>
+	<script type="text/javascript" src="./js/authPopup.js"></script>
+	<script type="text/javascript" src="./js/graph.js"></script>
+</footer>
+</html>
