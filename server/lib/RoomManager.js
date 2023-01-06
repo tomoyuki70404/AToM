@@ -175,40 +175,6 @@ class RoomManager{
 		});
 	}
 
-	// param1:ファイルを共有してきたsocketのId(基本TDにあたるソケット)
-	// informFileDataConsumers(socketId, addFile, status) =>{
-	// 	let consumerSocketIdList = []
-	//
-	// 	if(consumers.length == 0 && producers.length > 0){
-	// 		console.log(`consumers = 0 && producers > 0`)
-	// 		for(let key in peers){
-	// 				if(key != peers){
-	// 					const oneConsumerSocket = peers[key].socket
-	// 					oneConsumerSocket.emit('fileInfo',{
-	// 						fileName:addFile,
-	// 						status:status
-	// 					})
-	// 				}
-	// 		}
-	// 	}else{
-	//
-	// 		consumers.forEach( consumerData => {
-	// 			if(consumerSocketIdList.includes(consumerData.socketId) == false){
-	// 				const consumerSocket = peers[consumerData.socketId].socket
-	// 				consumerSocket.emit('fileInfo',{
-	// 					fileName:addFile,
-	// 					status:status
-	// 				})
-	// 				consumerSocketIdList.push(consumerData.socketId)
-	// 			}else{
-	// 				logger.error("add consumer socketId pass")
-	// 			}
-	//
-	// 		})
-	// 	}
-	//
-	// }
-
 	handleConnection(socket){
 		socket.emit('connection-success', {
 			socketId: socket.id,
@@ -589,16 +555,6 @@ class RoomManager{
 					console.log(roomCell)
 					console.log('disconnect End', socket.id)
 			})
-		})
-
-		socket.on('newFile', ({fileName})=>{
-			console.log("newFile recv")
-			const status = "newFile"
-			if(shareFiles.includes(fileName) == false){
-				console.log("add file")
-				shareFiles.push(fileName)
-			}
-			informFileDataConsumers(socket.id, fileName, status)
 		})
 
 	}
